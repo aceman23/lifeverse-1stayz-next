@@ -25,8 +25,8 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/people", icon: Users, label: "People" },
   { to: "/conversations", icon: MessageSquare, label: "Conversations" },
   { to: "/ai-training", icon: Sparkles, label: "AI Training" },
-  { to: "/follow-up-engine", icon: Zap, label: "Follow-Up Engine", soon: true },
-  { to: "/appointments", icon: CalendarDays, label: "Appointments", soon: true },
+  { to: "/follow-up-engine", icon: Zap, label: "Follow-Up Engine" },
+  { to: "/appointments", icon: CalendarDays, label: "Appointments" },
   { to: "/insights", icon: BarChart2, label: "Insights" },
   { to: "/settings", icon: Settings, label: "Settings" },
 ];

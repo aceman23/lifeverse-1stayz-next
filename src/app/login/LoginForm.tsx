@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { DEMO_COOKIE } from "@/lib/demo";
+import AuthSidePanel from "@/components/auth/AuthSidePanel";
 
 const inputClass =
   "w-full h-14 px-4 rounded-12 text-sm text-ink bg-surface border border-line outline-none transition " +
@@ -120,44 +121,7 @@ export default function LoginForm() {
 
   return (
     <div className="flex min-h-screen bg-bg">
-      {/* Left panel (desktop only) */}
-      <div className="relative hidden overflow-hidden p-16 lg:flex lg:w-1/2 lg:items-end">
-        <Image
-          src="/images/login-bg.jpg"
-          alt=""
-          fill
-          sizes="50vw"
-          loading="eager"
-          className="object-cover opacity-35"
-        />
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              "linear-gradient(180deg, var(--background) 0%, transparent 40%, transparent 60%, var(--background) 100%)",
-          }}
-        />
-        <div className="relative z-10">
-          <h2 className="mb-4 text-[44px] font-bold leading-tight tracking-[-0.02em] text-ink">
-            Retain more of your
-            <br />
-            first-time visitors.
-          </h2>
-          <p className="max-w-md text-lg leading-relaxed text-ink-2">
-            1Stayz follows up with every guest through intelligent, personalized
-            engagement that feels genuinely human.
-          </p>
-          <div className="mt-12">
-            <Image
-              src="/icons/ic_lifeverse_vertical1.png"
-              alt="Lifeverse"
-              width={61}
-              height={40}
-              className="h-10 w-auto opacity-50"
-            />
-          </div>
-        </div>
-      </div>
+      <AuthSidePanel />
 
       {/* Right column */}
       <div className="flex flex-1 flex-col items-center justify-center px-6 py-12">
@@ -274,6 +238,13 @@ export default function LoginForm() {
               <ArrowRight className="h-5 w-5" aria-hidden="true" />
             </button>
           </form>
+
+          <p className="mt-4 text-center text-sm text-ink-2">
+            New to 1Stayz?{" "}
+            <Link href="/sign-up" className="font-semibold text-teal-text">
+              Create an account
+            </Link>
+          </p>
 
           <Divider label="or" className="my-5" />
 

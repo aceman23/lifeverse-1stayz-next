@@ -1,16 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
   CalendarClock,
   Check,
   Church,
+  ClipboardList,
+  Download,
   MessageSquareText,
   Plug,
   Plus,
   Radio,
+  RefreshCw,
   ShieldCheck,
   UsersRound,
   type LucideIcon,
@@ -19,16 +22,22 @@ import { STAFF } from "@/data/staff";
 import { GUARDRAILS } from "@/data/training";
 import type { WorkspaceMode } from "@/data/types";
 import { CHURCH, FIRST_MESSAGE, INTEGRATIONS, MODE_COPY, SERVICES } from "@/data/workspace";
+import type { BetaSignup } from "@/lib/beta";
 import { cn } from "@/lib/cn";
+import { downloadCsv } from "@/lib/csv";
+import { formatShortDate } from "@/lib/format";
 import { useWorkspace } from "@/lib/workspace-context";
 import Avatar from "@/components/ui/Avatar";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
+import EmptyState from "@/components/ui/EmptyState";
 import StatusBadge, { SEVERITY_BADGE, STANCE_LABEL } from "@/components/ui/StatusBadge";
+import { useToast } from "@/components/ui/Toast";
 
-type Section = "profile" | "schedule" | "guardrails" | "team" | "message" | "integrations" | "mode";
+type SetupSection = "profile" | "schedule" | "guardrails" | "team" | "message" | "integrations" | "mode";
+type Section = SetupSection | "signups";
 
-const SECTIONS: { id: Section; label: string; icon: LucideIcon }[] = [
+const SECTIONS: { id: SetupSection; label: string; icon: LucideIcon }[] = [
   { id: "profile", label: "Church Profile", icon: Church },
   { id: "schedule", label: "Service Schedule", icon: CalendarClock },
   { id: "guardrails", label: "Guardrails", icon: ShieldCheck },
@@ -38,16 +47,20 @@ const SECTIONS: { id: Section; label: string; icon: LucideIcon }[] = [
   { id: "mode", label: "Mode", icon: Radio },
 ];
 
+// Admin tools; not part of the setup checklist.
+const ADMIN_SECTIONS: { id: Section; label: string; icon: LucideIcon }[] = [{ id: "signups", label: "Pilot signups", icon: ClipboardList }];
+
 const inputClass = "mt-1.5 h-10 w-full rounded-lg border border-line bg-surface px-3 text-sm text-ink outline-none focus:border-teal";
 
 export default function SettingsPage() {
+  const toast = useToast();
   const { mode } = useWorkspace();
   const [section, setSection] = useState<Section>("profile");
   const [church, setChurch] = useState(CHURCH);
   const [message, setMessage] = useState(FIRST_MESSAGE);
   const [integrations, setIntegrations] = useState(INTEGRATIONS);
 
-  const done: Record<Section, boolean> = {
+  const done: Record<SetupSection, boolean> = {
     profile: Boolean(church.name && church.phone && church.address && church.website),
     schedule: SERVICES.length > 0,
     guardrails: GUARDRAILS.length > 0,
@@ -63,7 +76,7 @@ export default function SettingsPage() {
       {/* Sub-nav: a scrolling chip row on mobile, a list from lg up */}
       <nav aria-label="Settings sections" className="animate-fade-in min-w-0">
         <ul className="-mx-4 flex gap-1 overflow-x-auto px-4 pb-1 lg:mx-0 lg:flex-col lg:px-0">
-          {SECTIONS.map(({ id, label, icon: Icon }) => {
+          {[...SECTIONS, ...ADMIN_SECTIONS].map(({ id, label, icon: Icon }) => {
             const active = section === id;
             return (
               <li key={id} className="shrink-0">
@@ -78,7 +91,7 @@ export default function SettingsPage() {
                 >
                   <Icon className={cn("h-4 w-4 shrink-0", active ? "text-teal" : "text-ink-3")} aria-hidden="true" />
                   <span className="flex-1">{label}</span>
-                  {done[id] && <Check className="hidden h-3.5 w-3.5 text-success lg:block" aria-label="Complete" />}
+                  {id !== "signups" && done[id] && <Check className="hidden h-3.5 w-3.5 text-success lg:block" aria-label="Complete" />}
                 </button>
               </li>
             );
@@ -127,7 +140,9 @@ export default function SettingsPage() {
               </label>
             </div>
             <div className="mt-5 flex justify-end">
-              <Button variant="primary">Save changes</Button>
+              <Button variant="primary" onClick={() => toast("Church profile saved.")}>
+                Save changes
+              </Button>
             </div>
           </Card>
         )}
@@ -151,7 +166,7 @@ export default function SettingsPage() {
               ))}
             </ul>
             <div className="border-t border-line px-5 py-3">
-              <Button variant="ghost" size="sm">
+              <Button variant="ghost" size="sm" onClick={() => toast("Adding services is coming soon. Email support to add one for now.", { tone: "info" })}>
                 <Plus className="h-3.5 w-3.5" aria-hidden="true" />
                 Add service
               </Button>
@@ -207,7 +222,7 @@ export default function SettingsPage() {
               ))}
             </ul>
             <div className="border-t border-line px-5 py-3">
-              <Button variant="ghost" size="sm">
+              <Button variant="ghost" size="sm" onClick={() => toast("Team invites are coming soon. Email support to add a teammate.", { tone: "info" })}>
                 <Plus className="h-3.5 w-3.5" aria-hidden="true" />
                 Invite teammate
               </Button>
@@ -285,6 +300,8 @@ export default function SettingsPage() {
         )}
 
         {section === "mode" && <ModeSettings />}
+
+        {section === "signups" && <PilotSignups />}
       </div>
 
       <aside className="min-w-0 lg:col-start-2 xl:col-start-auto">
@@ -362,6 +379,155 @@ function ModeSettings() {
           Live mode sends routine messages without review. Guardrail topics marked &ldquo;Route to pastor&rdquo; still wait for a person.
         </p>
       )}
+    </Card>
+  );
+}
+
+type SignupsState = { status: "loading" } | { status: "error"; message: string } | { status: "ready"; signups: BetaSignup[] };
+
+async function fetchSignups(): Promise<SignupsState> {
+  try {
+    const res = await fetch("/api/beta-signups", { cache: "no-store" });
+    // Signed-out requests get redirected to the login page by the proxy, which isn't JSON.
+    const body = res.headers.get("content-type")?.includes("application/json") ? await res.json() : null;
+    if (!res.ok || !body) return { status: "error", message: body?.error ?? "Sign in with a staff account to see pilot signups." };
+    return { status: "ready", signups: body.signups };
+  } catch {
+    return { status: "error", message: "Couldn't reach the server. Check your connection and try again." };
+  }
+}
+
+function PilotSignups() {
+  const toast = useToast();
+  const [state, setState] = useState<SignupsState>({ status: "loading" });
+
+  const load = useCallback(async (announce = false) => {
+    setState({ status: "loading" });
+    const next = await fetchSignups();
+    setState(next);
+    if (announce) {
+      if (next.status === "ready") toast(`Loaded ${next.signups.length} pilot ${next.signups.length === 1 ? "signup" : "signups"}.`);
+      else toast("Couldn't load pilot signups.", { tone: "danger" });
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchSignups().then((next) => {
+      if (!cancelled) setState(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const signups = state.status === "ready" ? state.signups : [];
+
+  function exportCsv() {
+    downloadCsv("1stayz-pilot-signups.csv", [
+      ["Signed up", "Name", "Email", "Church", "Role", "Phone", "Church size", "Notes"],
+      ...signups.map((s) => [s.created_at ?? "", s.name, s.email, s.church, s.role, s.phone, s.church_size, s.notes]),
+    ]);
+    toast(`Exported ${signups.length} ${signups.length === 1 ? "signup" : "signups"} as CSV.`);
+  }
+
+  return (
+    <Card
+      title="Pilot signups"
+      description="Churches that asked to join from the /beta form"
+      flush
+      action={
+        <div className="flex gap-1.5">
+          <Button size="sm" variant="ghost" onClick={() => load(true)} disabled={state.status === "loading"} aria-label="Refresh">
+            <RefreshCw className={cn("h-3.5 w-3.5", state.status === "loading" && "animate-spin")} aria-hidden="true" />
+          </Button>
+          <Button size="sm" variant="secondary" onClick={exportCsv} disabled={signups.length === 0}>
+            <Download className="h-3.5 w-3.5" aria-hidden="true" />
+            Export CSV
+          </Button>
+        </div>
+      }
+    >
+      <div className="border-t border-line">
+        {state.status === "loading" && (
+          <ul aria-busy="true" aria-label="Loading pilot signups" className="divide-y divide-line">
+            {[0, 1, 2].map((i) => (
+              <li key={i} className="flex animate-pulse items-center gap-3 px-5 py-4">
+                <span className="h-8 w-8 rounded-full bg-bg" />
+                <span className="h-3 w-1/3 rounded bg-bg" />
+                <span className="ml-auto h-3 w-1/4 rounded bg-bg" />
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {state.status === "error" && (
+          <div className="flex flex-col items-center px-6 py-10 text-center">
+            <p className="text-sm font-medium text-ink">Couldn&rsquo;t load pilot signups</p>
+            <p className="mt-1 max-w-sm text-xs leading-relaxed text-ink-2">{state.message}</p>
+            <Button size="sm" variant="secondary" className="mt-4" onClick={() => load(true)}>
+              Try again
+            </Button>
+          </div>
+        )}
+
+        {state.status === "ready" && signups.length === 0 && (
+          <EmptyState icon={ClipboardList} title="No signups yet" body="Share the /beta link or the beta QR code to start collecting interest." />
+        )}
+
+        {state.status === "ready" && signups.length > 0 && (
+          <>
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="text-[11px] tracking-wide text-ink-3 uppercase">
+                    <th className="px-5 py-3 font-medium">Name</th>
+                    <th className="px-3 py-3 font-medium">Church</th>
+                    <th className="px-3 py-3 font-medium">Size</th>
+                    <th className="px-3 py-3 font-medium">Phone</th>
+                    <th className="px-5 py-3 font-medium">Signed up</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line border-t border-line">
+                  {signups.map((s, i) => (
+                    <tr key={s.id ?? `${s.email}-${i}`} className="align-top">
+                      <td className="px-5 py-3">
+                        <p className="font-medium text-ink">{s.name}</p>
+                        <a href={`mailto:${s.email}`} className="text-xs text-teal-text hover:underline">
+                          {s.email}
+                        </a>
+                        {s.notes && <p className="mt-1 line-clamp-2 max-w-xs text-xs text-ink-3">{s.notes}</p>}
+                      </td>
+                      <td className="px-3 py-3 text-ink-2">
+                        {s.church ?? "—"}
+                        {s.role && <span className="block text-xs text-ink-3">{s.role}</span>}
+                      </td>
+                      <td className="px-3 py-3 whitespace-nowrap text-ink-2">{s.church_size ?? "—"}</td>
+                      <td className="px-3 py-3 whitespace-nowrap text-ink-2">{s.phone ?? "—"}</td>
+                      <td className="px-5 py-3 whitespace-nowrap text-ink-2">{s.created_at ? formatShortDate(s.created_at) : "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <ul className="divide-y divide-line md:hidden">
+              {signups.map((s, i) => (
+                <li key={s.id ?? `${s.email}-${i}`} className="px-5 py-3.5">
+                  <p className="flex items-baseline justify-between gap-2">
+                    <span className="truncate text-sm font-medium text-ink">{s.name}</span>
+                    {s.created_at && <span className="shrink-0 text-xs text-ink-3">{formatShortDate(s.created_at)}</span>}
+                  </p>
+                  <a href={`mailto:${s.email}`} className="block truncate text-xs text-teal-text">
+                    {s.email}
+                  </a>
+                  <p className="mt-1 text-xs text-ink-2">{[s.church, s.role, s.church_size, s.phone].filter(Boolean).join(" · ") || "No details"}</p>
+                  {s.notes && <p className="mt-1 text-xs text-ink-3">{s.notes}</p>}
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </div>
     </Card>
   );
 }
