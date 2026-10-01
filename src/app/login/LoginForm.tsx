@@ -4,7 +4,15 @@ import { useEffect, useState, type FormEvent, type MouseEvent } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AlertCircle, ArrowRight, CheckCircle2, Eye, EyeOff, HelpCircle, QrCode } from "lucide-react";
+import {
+  AlertCircle,
+  ArrowRight,
+  CheckCircle2,
+  Eye,
+  EyeOff,
+  HelpCircle,
+  QrCode,
+} from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { DEMO_COOKIE } from "@/lib/demo";
 
@@ -15,7 +23,10 @@ const inputClass =
 function Divider({ label, className }: { label: string; className: string }) {
   return (
     <div className={`relative flex items-center justify-center ${className}`}>
-      <div className="absolute inset-x-0 top-1/2 h-px bg-line" aria-hidden="true" />
+      <div
+        className="absolute inset-x-0 top-1/2 h-px bg-line"
+        aria-hidden="true"
+      />
       <span className="relative bg-bg px-3 text-xs text-ink-3">{label}</span>
     </div>
   );
@@ -62,7 +73,10 @@ export default function LoginForm() {
     setLoading(true);
 
     try {
-      const { error } = await createClient().auth.signInWithPassword({ email, password });
+      const { error } = await createClient().auth.signInWithPassword({
+        email,
+        password,
+      });
       if (error) {
         setError(error.message);
         setLoading(false);
@@ -71,7 +85,11 @@ export default function LoginForm() {
       router.push("/today");
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Something went wrong. Please try again.",
+      );
       setLoading(false);
     }
   }
@@ -102,7 +120,7 @@ export default function LoginForm() {
       {/* Left panel (desktop only) */}
       <div className="relative hidden overflow-hidden p-16 lg:flex lg:w-1/2 lg:items-end">
         <Image
-          src="https://images.pexels.com/photos/1666021/pexels-photo-1666021.jpeg?auto=compress&cs=tinysrgb&w=1200"
+          src="/images/login-bg.jpg"
           alt=""
           fill
           sizes="50vw"
@@ -122,11 +140,17 @@ export default function LoginForm() {
             first-time visitors.
           </h2>
           <p className="max-w-md text-lg leading-relaxed text-ink-2">
-            1Stayz follows up with every guest through intelligent, personalized engagement that feels genuinely
-            human.
+            1Stayz follows up with every guest through intelligent, personalized
+            engagement that feels genuinely human.
           </p>
           <div className="mt-12">
-            <Image src="/LifeversLogo.png" alt="Lifeverse" width={160} height={40} className="h-10 w-auto opacity-50" />
+            <Image
+              src="/icons/ic_lifeverse_vertical1.png"
+              alt="Lifeverse"
+              width={160}
+              height={40}
+              className="h-10 w-auto opacity-50"
+            />
           </div>
         </div>
       </div>
@@ -135,34 +159,53 @@ export default function LoginForm() {
       <div className="flex flex-1 flex-col items-center justify-center px-6 py-12">
         <div className="w-full max-w-[400px]">
           <Image
-            src="/LVHI_1Stayz.png"
+            src="/icons/ic_1stayz.png"
             alt="1Stayz by Lifeverse"
-            width={384}
-            height={192}
+            width={284}
+            height={112}
             priority
             className="mx-auto mb-8 h-48 w-auto object-contain"
           />
 
-          <h1 className="mb-2 text-center text-[32px] font-bold tracking-[-0.02em] text-ink">Welcome back</h1>
-          <p className="mb-8 text-center text-base text-ink-2">Sign in to your 1Stayz account.</p>
+          <h1 className="mb-2 text-center text-[32px] font-bold tracking-[-0.02em] text-ink">
+            Welcome back
+          </h1>
+          <p className="mb-8 text-center text-base text-ink-2">
+            Sign in to your 1Stayz account.
+          </p>
 
           {saved && (
-            <div role="alert" className="mb-5 flex gap-2.5 rounded-12 border border-success bg-success-tint p-3.5">
-              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden="true" />
+            <div
+              role="alert"
+              className="mb-5 flex gap-2.5 rounded-12 border border-success bg-success-tint p-3.5"
+            >
+              <CheckCircle2
+                className="mt-0.5 h-4 w-4 shrink-0 text-success"
+                aria-hidden="true"
+              />
               <p className="text-sm text-success">{saved}</p>
             </div>
           )}
 
           {error && (
-            <div role="alert" className="mb-5 flex gap-2.5 rounded-12 border border-danger bg-danger-tint p-3.5">
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-danger" aria-hidden="true" />
+            <div
+              role="alert"
+              className="mb-5 flex gap-2.5 rounded-12 border border-danger bg-danger-tint p-3.5"
+            >
+              <AlertCircle
+                className="mt-0.5 h-4 w-4 shrink-0 text-danger"
+                aria-hidden="true"
+              />
               <p className="text-sm text-danger">{error}</p>
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-ink">
+              <label
+                htmlFor="email"
+                className="mb-1.5 block text-sm font-medium text-ink"
+              >
                 Email address
               </label>
               <input
@@ -179,10 +222,16 @@ export default function LoginForm() {
 
             <div>
               <div className="mb-1.5 flex items-center justify-between">
-                <label htmlFor="password" className="text-sm font-medium text-ink">
+                <label
+                  htmlFor="password"
+                  className="text-sm font-medium text-ink"
+                >
                   Password
                 </label>
-                <button type="button" className="text-xs font-medium text-teal-text">
+                <button
+                  type="button"
+                  className="text-xs font-medium text-teal-text"
+                >
                   Forgot password?
                 </button>
               </div>
@@ -203,7 +252,11 @@ export default function LoginForm() {
                   aria-label={showPassword ? "Hide password" : "Show password"}
                   className="absolute right-4 top-1/2 flex h-11 w-11 -translate-y-1/2 translate-x-3.5 items-center justify-center text-ink-3 transition hover:text-ink"
                 >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
                 </button>
               </div>
             </div>
@@ -231,7 +284,11 @@ export default function LoginForm() {
 
           <p className="mt-6 text-center text-sm text-ink-2">
             Just want to look around?{" "}
-            <button type="button" onClick={handleDemo} className="font-semibold text-teal-text">
+            <button
+              type="button"
+              onClick={handleDemo}
+              className="font-semibold text-teal-text"
+            >
               Try the demo →
             </button>
           </p>
