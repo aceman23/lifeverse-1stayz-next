@@ -38,7 +38,10 @@ function hasDemoCookie() {
 
 export default function LoginForm() {
   const router = useRouter();
-  const saved = useSearchParams().get("saved");
+  const savedParam = useSearchParams().get("saved");
+  // ?saved=1 comes from onboarding's "Save & exit"; other values are shown as-is.
+  const saved =
+    savedParam === "1" ? "Your setup progress is saved. Sign in to pick up where you left off." : savedParam;
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -124,6 +127,7 @@ export default function LoginForm() {
           alt=""
           fill
           sizes="50vw"
+          loading="eager"
           className="object-cover opacity-35"
         />
         <div
@@ -147,7 +151,7 @@ export default function LoginForm() {
             <Image
               src="/icons/ic_lifeverse_vertical1.png"
               alt="Lifeverse"
-              width={160}
+              width={61}
               height={40}
               className="h-10 w-auto opacity-50"
             />
@@ -163,7 +167,7 @@ export default function LoginForm() {
             alt="1Stayz by Lifeverse"
             width={284}
             height={112}
-            priority
+            preload
             className="mx-auto mb-8 h-48 w-auto object-contain"
           />
 

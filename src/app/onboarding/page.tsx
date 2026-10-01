@@ -1,9 +1,8 @@
-export const metadata = { title: "Join the Pilot · 1Stayz" };
+import type { Metadata } from "next";
+import OnboardingWizard from "@/components/onboarding/OnboardingWizard";
+
+export const metadata: Metadata = { title: "Set up 1Stayz · 1Stayz" };
 
 export default function OnboardingPage() {
-  return (
-    <main className="flex min-h-screen items-center justify-center px-6">
-      <h1 className="text-2xl font-bold tracking-[-0.02em] text-ink">Onboarding</h1>
-    </main>
-  );
+  return <OnboardingWizard />;
 }

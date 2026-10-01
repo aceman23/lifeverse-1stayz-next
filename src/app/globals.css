@@ -41,3 +41,30 @@ body {
   background: var(--background);
   color: var(--text-primary);
 }
+
+/* Onboarding wizard: visible keyboard focus on every control, and a light step transition. */
+.onboarding :is(button, a, [role="switch"], input[type="checkbox"]):focus-visible {
+  outline: 2px solid #10b981;
+  outline-offset: 2px;
+}
+
+@keyframes step-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.step-enter {
+  animation: step-enter 240ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .step-enter {
+    animation: none;
+  }
+}
