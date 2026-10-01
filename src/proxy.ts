@@ -2,11 +2,12 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { DEMO_COOKIE } from "@/lib/demo";
 
-// Routes that require a Supabase session or the demo cookie.
-const PROTECTED_PREFIXES = ["/today"];
+// Routes anyone can open. Everything else is the app shell and needs a Supabase
+// session or the demo cookie.
+const PUBLIC_PREFIXES = ["/login", "/sign-up", "/onboarding", "/beta"];
 
 function isProtected(pathname: string) {
-  return PROTECTED_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+  return !PUBLIC_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
 export async function proxy(request: NextRequest) {
