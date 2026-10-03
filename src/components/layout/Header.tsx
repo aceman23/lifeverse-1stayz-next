@@ -28,7 +28,7 @@ const NOTIFICATION_ICON: Record<Notification["kind"], { icon: typeof Bell; class
   system: { icon: Info, className: "bg-info-tint text-info" },
 };
 
-export default function Header({ onOpenMenu, menuOpen }: { onOpenMenu: () => void; menuOpen: boolean }) {
+export default function Header({ onToggleMenu, menuOpen }: { onToggleMenu: () => void; menuOpen: boolean }) {
   const pathname = usePathname();
   const router = useRouter();
   const meta = getRouteMeta(pathname);
@@ -56,11 +56,11 @@ export default function Header({ onOpenMenu, menuOpen }: { onOpenMenu: () => voi
       <div className="flex h-16 items-center gap-3 px-4 md:px-8">
         <button
           type="button"
-          onClick={onOpenMenu}
-          aria-label="Open menu"
+          onClick={onToggleMenu}
+          aria-label={menuOpen ? "Hide menu" : "Show menu"}
           aria-controls="app-sidebar"
           aria-expanded={menuOpen}
-          className="-ml-2 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-ink-2 transition-colors hover:bg-bg hover:text-ink md:hidden"
+          className="-ml-2 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-ink-2 transition-colors hover:bg-bg hover:text-ink"
         >
           <Menu className="h-5 w-5" aria-hidden="true" />
         </button>

@@ -9,12 +9,14 @@ import { useWorkspace } from "@/lib/workspace-context";
 import { cn } from "@/lib/cn";
 
 interface SidebarProps {
-  /** Mobile drawer state. The sidebar is always visible from md up. */
+  /** Mobile drawer state. */
   open: boolean;
+  /** Desktop (md+) state: when true the docked sidebar slides away. */
+  collapsed: boolean;
   onClose: () => void;
 }
 
-export default function Sidebar({ open, onClose }: SidebarProps) {
+export default function Sidebar({ open, collapsed, onClose }: SidebarProps) {
   const pathname = usePathname();
   const { actionCount } = useWorkspace();
 
@@ -33,9 +35,9 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
         aria-label="Main navigation"
         className={cn(
           "fixed inset-y-0 left-0 z-50 flex w-56 flex-col bg-ink text-white transition-[translate,visibility] duration-200 ease-out",
-          "md:visible md:translate-x-0",
           // `invisible` keeps the closed drawer out of the tab order; visibility flips after the slide.
           open ? "visible translate-x-0 shadow-pop md:shadow-none" : "invisible -translate-x-full",
+          collapsed ? "md:invisible md:-translate-x-full" : "md:visible md:translate-x-0",
         )}
       >
         <div className="flex h-16 items-center justify-between px-5">
