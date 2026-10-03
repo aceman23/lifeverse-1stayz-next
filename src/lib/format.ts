@@ -7,12 +7,18 @@ const time = new Intl.DateTimeFormat("en-US", { timeZone: ZONE, hour: "numeric",
 const day = new Intl.DateTimeFormat("en-US", { timeZone: ZONE, weekday: "short", month: "short", day: "numeric" });
 const longDay = new Intl.DateTimeFormat("en-US", { timeZone: ZONE, weekday: "long", month: "long", day: "numeric" });
 const shortDate = new Intl.DateTimeFormat("en-US", { timeZone: ZONE, month: "short", day: "numeric" });
+const weekdayDate = new Intl.DateTimeFormat("en-US", { timeZone: ZONE, weekday: "long", month: "short", day: "numeric" });
+const clock = new Intl.DateTimeFormat("en-US", { timeZone: ZONE, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 
 export const formatTime = (iso: string) => time.format(new Date(iso));
 export const formatDay = (iso: string) => day.format(new Date(iso));
 export const formatLongDay = (iso: string) => longDay.format(new Date(iso));
 export const formatShortDate = (iso: string) => shortDate.format(new Date(iso));
-export const formatDayTime = (iso: string) => `${formatDay(iso)} · ${formatTime(iso)}`;
+/** "Thursday, Oct 1" */
+export const formatWeekdayDate = (iso: string) => weekdayDate.format(new Date(iso));
+/** 24-hour "14:32", for compact activity logs. */
+export const formatClock = (iso: string) => clock.format(new Date(iso));
+export const formatDayTime =(iso: string) => `${formatDay(iso)} · ${formatTime(iso)}`;
 
 export function formatRelative(iso: string) {
   const diff = NOW.getTime() - new Date(iso).getTime();

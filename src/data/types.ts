@@ -92,12 +92,24 @@ export interface TodayItem {
   id: string;
   status: TodayStatus;
   personId: string | null;
-  title: string;
+  /** Heading for items not tied to a person; person items show the person's name. */
+  title?: string;
   detail: string;
+  /** Secondary line under the detail, e.g. "No reply to follow-up · 3 days". */
+  meta?: string;
   /** Message the assistant drafted and is waiting to send. */
   draft?: string;
   channel?: Channel;
+  /** When the item surfaced; escalations count their reply window from here. */
   dueAt: string;
+  /** Resolved today; listed under "Done today" with an undo. */
+  done?: boolean;
+  /** Escalation hero card: the guest's words, why it escalated, and quick facts. */
+  quote?: string;
+  summary?: string;
+  why?: string;
+  chips?: string[];
+  service?: string;
 }
 
 export type DocumentStatus = "indexed" | "processing" | "pending" | "failed";
