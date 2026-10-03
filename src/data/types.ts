@@ -63,7 +63,8 @@ export interface Person {
   timeline: EngagementEvent[];
 }
 
-export type ConversationStatus = "active" | "paused" | "taken_over" | "escalated";
+/** `active` means the assistant is replying; `paused` holds it; `taken_over` means staff are replying. */
+export type ConversationStatus = "active" | "paused" | "taken_over" | "ended";
 export type ConversationOutcome = "resolved" | "escalated" | "no_action" | "follow_up";
 
 export interface Message {
@@ -73,6 +74,8 @@ export interface Message {
   at: string;
   /** Staff member who sent it, for `from: "staff"`. */
   authorId?: string;
+  /** Matched an escalation topic or crisis keyword. */
+  flagged?: boolean;
 }
 
 export interface Conversation {

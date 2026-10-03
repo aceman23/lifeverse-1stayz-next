@@ -61,7 +61,7 @@ export const CONVERSATION_STATUS_BADGE: Record<ConversationStatus, Spec> = {
   active: { label: "Active", tone: "teal" },
   paused: { label: "Paused", tone: "neutral" },
   taken_over: { label: "Taken over", tone: "info" },
-  escalated: { label: "Escalated", tone: "danger" },
+  ended: { label: "Ended", tone: "neutral" },
 };
 
 export const OUTCOME_BADGE: Record<ConversationOutcome, Spec> = {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
+import { usePathname } from "next/navigation";
 import { WorkspaceProvider } from "@/lib/workspace-context";
 import { cn } from "@/lib/cn";
 import { ToastProvider } from "../ui/Toast";
@@ -10,6 +11,8 @@ import Sidebar from "./Sidebar";
 const DESKTOP_QUERY = "(min-width: 768px)";
 const COLLAPSED_KEY = "1stayz:sidebar-collapsed";
 const COLLAPSED_EVENT = "1stayz:sidebar-collapsed";
+/** Pages that use the whole content width instead of the centered 1280px column. */
+const FULL_WIDTH_ROUTES = ["/conversations"];
 
 function subscribeDesktop(onChange: () => void) {
   const mq = window.matchMedia(DESKTOP_QUERY);
@@ -44,6 +47,7 @@ function setCollapsed(value: boolean) {
 export default function AppShell({ children }: { children: React.ReactNode }) {
   // Mobile: off-canvas drawer. Desktop (md+): docked sidebar that can be collapsed.
   const [menuOpen, setMenuOpen] = useState(false);
+  const pathname = usePathname();
   const isDesktop = useSyncExternalStore(subscribeDesktop, getDesktop, () => false);
   const collapsed = useSyncExternalStore(subscribeCollapsed, getCollapsed, () => false);
   // The drawer is a mobile-only concept; ignore it once the viewport is desktop-sized.
@@ -81,7 +85,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           )}
         >
           <Header onToggleMenu={toggleMenu} menuOpen={isDesktop ? !collapsed : drawerOpen} />
-          <main className="mx-auto w-full max-w-[1280px] min-w-0 flex-1 px-4 py-6 md:px-8 md:py-8">{children}</main>
+          <main
+            className={cn(
+              "mx-auto w-full min-w-0 flex-1 px-4 py-6 md:px-8 md:py-8",
+              !FULL_WIDTH_ROUTES.some((r) => pathname.startsWith(r)) && "max-w-[1280px]",
+            )}
+          >
+            {children}
+          </main>
         </div>
       </div>
       </ToastProvider>

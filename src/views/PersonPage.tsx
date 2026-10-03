@@ -238,7 +238,7 @@ export default function PersonPage({ person }: { person: Person }) {
             {conversation ? (
               <div className="space-y-3">
                 {conversation.messages.map((m) => (
-                  <MessageBubble key={m.id} message={m} guestName={person.firstName} />
+                  <MessageBubble key={m.id} message={m} />
                 ))}
               </div>
             ) : (
