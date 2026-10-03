@@ -120,12 +120,50 @@ export type DocumentStatus = "indexed" | "processing" | "pending" | "failed";
 export interface TrainingDocument {
   id: string;
   name: string;
-  kind: "pdf" | "docx" | "txt" | "url";
+  kind: "pdf" | "docx" | "txt" | "md" | "url";
   sizeKb: number | null;
   uploadedAt: string;
   status: DocumentStatus;
   sections: number | null;
   error?: string;
+  summary?: string;
+  tags?: string[];
+  uploadedBy?: string;
+}
+
+export type ChatbotStatus = "draft" | "training" | "active" | "paused";
+
+export type GuardrailRuleType = "blocked_topic" | "required_response" | "escalation_trigger" | "tone_constraint" | "content_boundary";
+
+/** A plain-language rule a chatbot must follow. */
+export interface GuardrailRule {
+  id: string;
+  type: GuardrailRuleType;
+  text: string;
+  severity: Severity;
+  active: boolean;
+}
+
+/** 0–100 sliders that shape how a chatbot writes. */
+export interface ChatbotTone {
+  warmth: number;
+  directness: number;
+  formality: number;
+  scripture: number;
+}
+
+export interface Chatbot {
+  id: string;
+  name: string;
+  model: string;
+  description: string | null;
+  status: ChatbotStatus;
+  lastTrainedAt: string | null;
+  /** System prompt: the bot's core identity and behavioral instructions. */
+  prompt: string;
+  tone: ChatbotTone;
+  documents: TrainingDocument[];
+  guardrails: GuardrailRule[];
 }
 
 export type Severity = "low" | "medium" | "high" | "critical";
