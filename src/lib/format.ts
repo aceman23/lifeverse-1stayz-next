@@ -18,7 +18,7 @@ export const formatShortDate = (iso: string) => shortDate.format(new Date(iso));
 export const formatWeekdayDate = (iso: string) => weekdayDate.format(new Date(iso));
 /** 24-hour "14:32", for compact activity logs. */
 export const formatClock = (iso: string) => clock.format(new Date(iso));
-export const formatDayTime =(iso: string) => `${formatDay(iso)} · ${formatTime(iso)}`;
+export const formatDayTime = (iso: string) => `${formatDay(iso)} · ${formatTime(iso)}`;
 
 export function formatRelative(iso: string) {
   const diff = NOW.getTime() - new Date(iso).getTime();
