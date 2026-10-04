@@ -2,8 +2,6 @@
 
 The 1Stayz web app by Lifeverse, built on Next.js 16 (App Router), React 19, Tailwind CSS 4 and Supabase.
 
-> **Heads-up:** this Next.js version has breaking changes from older releases. Read [AGENTS.md](AGENTS.md) and the guides in `node_modules/next/dist/docs/` before changing framework-level code.
-
 ## Branches and release flow
 
 | Branch       | Purpose                              | Who merges into it          |
