@@ -39,16 +39,27 @@ function hasDemoCookie() {
 
 export default function LoginForm() {
   const router = useRouter();
-  const savedParam = useSearchParams().get("saved");
+  const searchParams = useSearchParams();
+  const savedParam = searchParams.get("saved");
+  // ?registered=1 comes from sign-up; those users continue to onboarding after signing in.
+  const justRegistered = searchParams.get("registered") === "1";
   // ?saved=1 comes from onboarding's "Save & exit"; other values are shown as-is.
-  const saved =
-    savedParam === "1" ? "Your setup progress is saved. Sign in to pick up where you left off." : savedParam;
+  const saved = justRegistered
+    ? "Your account is created. Sign in to set up your church."
+    : savedParam === "1"
+      ? "Your setup progress is saved. Sign in to pick up where you left off."
+      : savedParam;
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // ?error=confirm comes from /auth/callback when an email link is invalid or expired.
+  const [error, setError] = useState<string | null>(
+    searchParams.get("error") === "confirm"
+      ? "That confirmation link is invalid or has expired. Sign in, or sign up again to get a new link."
+      : null,
+  );
 
   // Already signed in (or in demo mode)? Skip the login screen.
   useEffect(() => {
@@ -86,7 +97,7 @@ export default function LoginForm() {
         setLoading(false);
         return;
       }
-      router.push("/today");
+      router.push(justRegistered ? "/onboarding" : "/today");
       router.refresh();
     } catch (err) {
       setError(

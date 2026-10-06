@@ -4,7 +4,7 @@ import { DEMO_COOKIE } from "@/lib/demo";
 
 // Routes anyone can open. Everything else is the app shell and needs a Supabase
 // session or the demo cookie.
-const PUBLIC_PREFIXES = ["/login", "/sign-up", "/onboarding", "/beta"];
+const PUBLIC_PREFIXES = ["/login", "/sign-up", "/onboarding", "/beta", "/auth"];
 
 function isProtected(pathname: string) {
   return !PUBLIC_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
