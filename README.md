@@ -70,6 +70,8 @@ cp .env.local.example .env        # Windows PowerShell: Copy-Item .env.local.exa
 | `NEXT_PUBLIC_SUPABASE_URL`      | Yes      | Supabase project URL                                                        |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes      | Supabase anonymous (public) API key                                         |
 | `NEXT_PUBLIC_SITE_URL`          | No       | Public site URL used in the `/beta/qr` code; defaults to the current host   |
+| `AI_<FEATURE>_GROQ_API_KEY`, `AI_<FEATURE>_ANTHROPIC_API_KEY` | For AI features | Model keys per feature; see [AI model keys](#ai-model-keys) |
+| `AI_STUB`                       | No       | `1` answers every model call with a stub: no keys, no spend                 |
 
 `.env` is git-ignored. Never commit real keys. Restart the dev server after changing it.
 
@@ -96,6 +98,7 @@ Open [http://localhost:3000](http://localhost:3000).
 | `npm run start`     | Serve the production build                |
 | `npm run lint`      | Run ESLint                                |
 | `npm run typecheck` | Run the TypeScript compiler without output |
+| `npm run ai:check`  | Check every AI key and model without spending tokens |
 
 ## Checks
 
@@ -107,6 +110,34 @@ npm run typecheck
 npm run build
 ```
 
+## AI model keys
+
+All model calls go through `createModelClient(feature)` in `src/lib/ai`. Each feature has its own keys, so usage and spend show up separately in each console:
+
+| Feature      | Used for                                                    | Groq project / Claude workspace |
+| ------------ | ----------------------------------------------------------- | ------------------------------- |
+| `onboarding` | Church setup: website reader, onboarding helpers            | `1stayz-onboarding`             |
+| `messaging`  | Guest conversations: tagger, first contact, replies, escalation gate | `1stayz-messaging`     |
+| `evals`      | Eval runs and the model benchmark (dev only)                | `1stayz-evals`                  |
+
+Both consoles track usage per project or workspace, not per key, so keep one project and one workspace per feature. Inside each, create one key per environment and name it `<feature>-<environment>`, e.g. `messaging-staging`. The env var names are the same everywhere (`AI_MESSAGING_GROQ_API_KEY`); only the value differs per Vercel environment.
+
+```ts
+import { createModelClient } from "@/lib/ai";
+
+const ai = createModelClient("messaging");
+const reply = await ai.complete({
+  role: "fast",                 // fast = Groq, frontier = Claude
+  system: "…",
+  messages: [{ role: "user", content: "When is kids check-in?" }],
+});
+```
+
+- `src/lib/ai` is server only. Importing it from a client component fails the build.
+- Every call writes one `ai.call` JSON line to the server logs (feature, model, tokens, latency). Prompts and replies are never logged, because they can contain guest data.
+- Until the AI-02 data-retention terms are confirmed, send only synthetic guest data to either provider.
+- `AI_STUB=1` (or `createModelClient(feature, { stub: true })` in tests) returns predictable stub replies with no keys.
+
 ## Project structure
 
 ```
@@ -115,10 +146,11 @@ src/
   views/        Page components (Today, Dashboard, People, Conversations, ...)
   components/   Shared UI, layout (sidebar, header) and onboarding steps
   data/         Mock data and shared types, until pages read from Supabase
-  lib/          Helpers: Supabase clients, auth, formatting, workspace state
+  lib/          Helpers: Supabase clients, auth, AI model client (lib/ai), formatting, workspace state
   hooks/        Reusable React hooks
   config/       Navigation and route metadata
   proxy.ts      Auth gate that redirects signed-out visitors to /login
+scripts/        Dev scripts (check-ai-keys.mjs)
 public/         Static assets
 ```
 
