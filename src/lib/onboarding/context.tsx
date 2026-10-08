@@ -4,28 +4,35 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { LAST_STEP, STORAGE_KEY } from "./constants";
+import { loadChurch, saveChurch } from "./db";
 import { createDemoState, createInitialState } from "./initial-state";
 import type { OnboardingState, StatePatch } from "./types";
-import { computeReadyCheck } from "./validation";
+import { canContinue, computeReadyCheck } from "./validation";
 
 interface OnboardingContextValue {
   state: OnboardingState;
   hydrated: boolean;
+  /** True while a step is being written to Supabase. */
+  saving: boolean;
+  saveError: string | null;
   update: (patch: StatePatch) => void;
-  nextStep: () => void;
+  nextStep: () => Promise<void>;
   prevStep: () => void;
-  goToStep: (step: number) => void;
+  goToStep: (step: number) => Promise<void>;
   reset: () => void;
-  saveAndExit: () => Promise<void>;
+  /** Resolves false if the save failed and the user is still on the page. */
+  saveAndExit: () => Promise<boolean>;
 }
 
 const OnboardingContext = createContext<OnboardingContextValue | null>(null);
 
 const clampStep = (step: number) => Math.min(Math.max(Math.round(step) || 0, 0), LAST_STEP);
 
+const isDemo = () => new URLSearchParams(window.location.search).get("demo") === "1";
+
 function loadState(): OnboardingState {
   const initial = createInitialState();
-  if (new URLSearchParams(window.location.search).get("demo") === "1") return createDemoState();
+  if (isDemo()) return createDemoState();
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return initial;
@@ -55,12 +62,24 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
   const router = useRouter();
   const [state, setState] = useState<OnboardingState>(createInitialState);
   const [hydrated, setHydrated] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
-  // Read storage after mount so the server and first client render match.
+  // Read storage after mount so the server and first client render match. A church saved
+  // in Supabase wins over localStorage, so signing in on another device picks it up.
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time sync from localStorage
-    setState(loadState());
-    setHydrated(true);
+    let cancelled = false;
+    (async () => {
+      const local = loadState();
+      const church = isDemo() ? null : await loadChurch();
+      if (cancelled) return;
+      const merged = church ? { ...local, church: { ...local.church, ...church } } : local;
+      setState({ ...merged, readyCheck: computeReadyCheck(merged) });
+      setHydrated(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -68,19 +87,44 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
   }, [state, hydrated]);
 
   const update = useCallback((patch: StatePatch) => {
+    setSaveError(null);
     setState((prev) => {
       const next = { ...prev, ...(typeof patch === "function" ? patch(prev) : patch) };
       return { ...next, currentStep: clampStep(next.currentStep), readyCheck: computeReadyCheck(next) };
     });
   }, []);
 
-  const goToStep = useCallback((step: number) => update({ currentStep: step }), [update]);
-  const nextStep = useCallback(() => update((s) => ({ currentStep: s.currentStep + 1 })), [update]);
+  /** Writes the saved-to-Supabase parts of `s`. Returns false (and sets saveError) on failure. */
+  const saveToDb = useCallback(async (s: OnboardingState) => {
+    if (isDemo() || !canContinue(0, s)) return true;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await saveChurch(s.church);
+      return true;
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Couldn't save your progress. Try again.");
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }, []);
+
+  const goToStep = useCallback(
+    async (step: number) => {
+      // Leaving step 1 by any route (Continue or the progress bar) saves the church first.
+      if (state.currentStep === 0 && step !== 0 && !(await saveToDb(state))) return;
+      update({ currentStep: step });
+    },
+    [state, saveToDb, update],
+  );
+  const nextStep = useCallback(() => goToStep(state.currentStep + 1), [goToStep, state.currentStep]);
   const prevStep = useCallback(() => update((s) => ({ currentStep: s.currentStep - 1 })), [update]);
   const reset = useCallback(() => setState(createInitialState()), []);
 
   const saveAndExit = useCallback(async () => {
     persist(state);
+    if (!(await saveToDb(state))) return false;
     let signedIn = false;
     try {
       const { data } = await createClient().auth.getUser();
@@ -89,11 +133,12 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       // Supabase not configured; treat as signed out.
     }
     router.push(signedIn ? "/today" : "/login?saved=1");
-  }, [state, router]);
+    return true;
+  }, [state, router, saveToDb]);
 
   const value = useMemo(
-    () => ({ state, hydrated, update, nextStep, prevStep, goToStep, reset, saveAndExit }),
-    [state, hydrated, update, nextStep, prevStep, goToStep, reset, saveAndExit],
+    () => ({ state, hydrated, saving, saveError, update, nextStep, prevStep, goToStep, reset, saveAndExit }),
+    [state, hydrated, saving, saveError, update, nextStep, prevStep, goToStep, reset, saveAndExit],
   );
 
   return <OnboardingContext.Provider value={value}>{children}</OnboardingContext.Provider>;
