@@ -30,8 +30,24 @@ function Skeleton() {
   );
 }
 
+function LoadError({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
+      <p className="font-medium">We couldn&apos;t load your saved setup.</p>
+      <p className="mt-1">{message}</p>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="mt-3 inline-flex min-h-11 items-center rounded-xl bg-[#1a2e2a] px-4 text-sm font-medium text-white transition-colors hover:bg-[#245045]"
+      >
+        Try again
+      </button>
+    </div>
+  );
+}
+
 export default function OnboardingWizard() {
-  const { state, hydrated, saving, saveError, saveAndExit } = useOnboarding();
+  const { state, hydrated, loadError, retryLoad, saving, saveError, saveAndExit } = useOnboarding();
   const [exiting, setExiting] = useState(false);
   const step = state.currentStep;
   const StepComponent = STEPS[step];
@@ -86,6 +102,8 @@ export default function OnboardingWizard() {
                 )}
                 {step < STEPS.length - 1 && <StepNav />}
               </>
+            ) : loadError ? (
+              <LoadError message={loadError} onRetry={retryLoad} />
             ) : (
               <Skeleton />
             )}
