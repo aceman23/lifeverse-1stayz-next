@@ -31,7 +31,7 @@ function Skeleton() {
 }
 
 export default function OnboardingWizard() {
-  const { state, hydrated, saveAndExit } = useOnboarding();
+  const { state, hydrated, saving, saveError, saveAndExit } = useOnboarding();
   const [exiting, setExiting] = useState(false);
   const step = state.currentStep;
   const StepComponent = STEPS[step];
@@ -42,7 +42,8 @@ export default function OnboardingWizard() {
 
   async function handleExit() {
     setExiting(true);
-    await saveAndExit();
+    // On success the page navigates away, so the button stays disabled.
+    if (!(await saveAndExit())) setExiting(false);
   }
 
   return (
@@ -60,7 +61,7 @@ export default function OnboardingWizard() {
           <button
             type="button"
             onClick={handleExit}
-            disabled={!hydrated || exiting}
+            disabled={!hydrated || exiting || saving}
             className="-mr-2 inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-sm font-medium text-stone-600 transition-colors hover:text-stone-900 disabled:opacity-50"
           >
             {exiting ? "Saving…" : "Save & exit"}
@@ -78,6 +79,11 @@ export default function OnboardingWizard() {
                 <div key={step} className="step-enter">
                   <StepComponent />
                 </div>
+                {saveError && (
+                  <p role="alert" className="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    {saveError}
+                  </p>
+                )}
                 {step < STEPS.length - 1 && <StepNav />}
               </>
             ) : (
