@@ -41,3 +41,12 @@ How the wizard uses them:
 - Uploaded guardrail documents are stored by name and type only. The files themselves aren't uploaded yet.
 
 Row level security is on for every table: users can only see and change churches they belong to, and signed-out (`anon`) requests can't read or write any of it. Signed-out visitors can still go through onboarding; their progress stays in localStorage until they sign in.
+
+## Public schema lockdown
+
+`…130000_lockdown_public_schema.sql` makes this the rule for the whole `public` schema, including tables added later:
+
+- `anon` has no rights on any table, sequence or function in `public`, and new objects don't get any by default.
+- `authenticated` has only `SELECT`, `INSERT`, `UPDATE` and `DELETE`, so every request goes through RLS. `TRUNCATE` is removed because it skips RLS.
+- RLS is on and forced for every table. An event trigger (`enforce_rls_on_new_tables`) turns it on for any new table in `public`, including tables made in the dashboard. A new table can't be read by anyone until you add policies for it.
+- When you add a table, write its policies `to authenticated`, and add `revoke execute ... from public, anon` after any new function.
