@@ -1,9 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import { Building2, Clock, Globe, Phone, User } from "lucide-react";
 import { ROLES, TIMEZONES } from "@/lib/onboarding/constants";
 import { useOnboarding } from "@/lib/onboarding/context";
 import type { ChurchProfile } from "@/lib/onboarding/types";
+import { formatPhone, phoneError, websiteError } from "@/lib/onboarding/validation";
 import Card from "../ui/Card";
 import SectionHeader from "../ui/SectionHeader";
 import Select from "../ui/Select";
@@ -14,6 +16,16 @@ export default function Step1Church() {
   const church = state.church;
   const set = (field: keyof ChurchProfile) => (value: string) =>
     update((s) => ({ church: { ...s.church, [field]: value } }));
+
+  // Errors show once a field has been left, so they don't flash up mid-typing. Saved values
+  // that are already invalid show straight away, since they're what's blocking Continue.
+  const [touched, setTouched] = useState(() => ({
+    phone: church.phone.trim() !== "",
+    website: church.website.trim() !== "",
+  }));
+  const touch = (field: keyof typeof touched) => setTouched((t) => ({ ...t, [field]: true }));
+  const phoneMsg = touched.phone ? phoneError(church.phone) : null;
+  const websiteMsg = touched.website ? websiteError(church.website) : null;
 
   return (
     <div className="space-y-6">
@@ -55,14 +67,27 @@ export default function Step1Church() {
             type="tel"
             value={church.phone}
             onChange={set("phone")}
+            onBlur={() => {
+              touch("phone");
+              const formatted = formatPhone(church.phone);
+              if (formatted !== church.phone) set("phone")(formatted);
+            }}
+            error={phoneMsg}
             placeholder="(555) 123-4567"
             autoComplete="tel"
+            inputMode="tel"
           />
           <TextField
             label="Website"
             icon={Globe}
             value={church.website}
             onChange={set("website")}
+            onBlur={() => {
+              touch("website");
+              const trimmed = church.website.trim();
+              if (trimmed !== church.website) set("website")(trimmed);
+            }}
+            error={websiteMsg}
             placeholder="gracecommunity.org"
             autoComplete="url"
             inputMode="url"

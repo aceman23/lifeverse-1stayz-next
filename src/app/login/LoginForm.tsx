@@ -97,6 +97,7 @@ export default function LoginForm() {
         setLoading(false);
         return;
       }
+      // The proxy sends anyone whose setup isn't finished to /onboarding, at the saved step.
       router.push(justRegistered ? "/onboarding" : "/today");
       router.refresh();
     } catch (err) {
@@ -109,15 +110,10 @@ export default function LoginForm() {
     }
   }
 
+  // Onboarding saves to the user's account, so joining starts with creating one.
+  // After signing in, the proxy sends anyone with unfinished setup to /onboarding.
   function handleJoinPilot() {
-    try {
-      Object.keys(localStorage)
-        .filter((key) => key.toLowerCase().includes("onboarding"))
-        .forEach((key) => localStorage.removeItem(key));
-    } catch {
-      // Storage unavailable; nothing to clear.
-    }
-    router.push("/onboarding");
+    router.push("/sign-up");
   }
 
   function handleDemo() {

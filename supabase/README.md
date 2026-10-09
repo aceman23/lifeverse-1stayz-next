@@ -35,12 +35,26 @@ How the wizard uses them:
 
 - Moving between steps (Continue, Back, the progress bar) saves the step being left, then records the new step in `onboarding_progress.current_step` so the user resumes there.
 - Save functions replace a step's data wholesale, so saving the same step twice is safe. Lists (services, staff, ...) keep the app's own row id in `client_id`.
-- `onboarding_progress.last_saved_step` is the furthest step saved. If someone started signed out, the first save also sends the earlier steps the database is missing.
-- On load, everything saved in Supabase wins over the browser's localStorage copy.
+- `onboarding_progress.last_saved_step` is the furthest step saved. If it's behind the current step, the next save also sends the steps in between.
+- **Save & exit** saves the current step, signs the user out and opens `/login`. Signing in again, on any device, resumes at the saved step.
+- Supabase is the only copy of the progress. Nothing is kept in localStorage; old local copies are deleted when the wizard loads and on sign-out. If loading fails, the wizard shows the error with a retry instead of an empty form, so a blank form can't overwrite saved answers.
 - The Ready Check list isn't stored; the app works it out from the other steps.
 - Uploaded guardrail documents are stored by name and type only. The files themselves aren't uploaded yet.
 
-Row level security is on for every table: users can only see and change churches they belong to, and signed-out (`anon`) requests can't read or write any of it. Signed-out visitors can still go through onboarding; their progress stays in localStorage until they sign in.
+Row level security is on for every table: users can only see and change churches they belong to, and signed-out (`anon`) requests can't read or write any of it.
+
+## Who can open what
+
+`src/proxy.ts` applies these rules (written out in `src/lib/onboarding/routing.ts`):
+
+| Visitor | Can open | Redirected |
+| --- | --- | --- |
+| Signed out | `/login`, `/sign-up`, `/beta`, `/auth/*`, the `/onboarding?demo=1` demo wizard | everything else → `/login` |
+| Signed in, onboarding not finished | `/onboarding` | `/today` and every other app page, and `/login` → `/onboarding` |
+| Signed in, onboarding finished | the app | `/onboarding` and `/login` → `/today` |
+| "Try the demo" cookie | the app with mock data | `/login` → `/today` |
+
+"Finished" means `onboarding_progress.completed = true` for a church the user belongs to, which `finish_onboarding()` sets at step 8. If that can't be read, app pages send the user to `/onboarding`.
 
 ## Public schema lockdown
 

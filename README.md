@@ -149,7 +149,7 @@ src/
   lib/          Helpers: Supabase clients, auth, AI model client (lib/ai), formatting, workspace state
   hooks/        Reusable React hooks
   config/       Navigation and route metadata
-  proxy.ts      Auth gate that redirects signed-out visitors to /login
+  proxy.ts      Auth gate: signed-out visitors go to /login, unfinished setups to /onboarding
 scripts/        Dev scripts (check-ai-keys.mjs)
 public/         Static assets
 ```

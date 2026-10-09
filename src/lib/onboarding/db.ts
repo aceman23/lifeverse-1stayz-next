@@ -12,8 +12,9 @@ import type {
 import { syncEscalationOrder } from "./validation";
 
 // Supabase reads and writes for onboarding. Tables and save functions are defined in
-// supabase/migrations/*_onboarding_step*.sql, one migration per step. Signed-out visitors and
-// setups without Supabase env vars get null back and keep working from localStorage alone.
+// supabase/migrations/*_onboarding_step*.sql, one migration per step. Supabase is the only place
+// progress is kept. With no session (or no Supabase env vars) these return null; the caller
+// treats a null save as a failure.
 
 /** "America/Chicago (CT)" -> "America/Chicago" */
 const toIanaZone = (label: string) => label.split(" ")[0];
@@ -369,7 +370,7 @@ async function saveOne(supabase: SupabaseClient, step: number, s: OnboardingStat
 
 /**
  * Saves `step` plus any earlier steps the database doesn't have yet (`lastSavedStep` is the
- * furthest one it does, -1 for none), e.g. when someone started signed out. Then records
+ * furthest one it does, -1 for none). Then records
  * `nextStep` as where to resume.
  *
  * Returns the new furthest saved step, or null when no one is signed in to save for.

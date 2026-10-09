@@ -6,6 +6,10 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
   title: "1Stayz by Lifeverse",
+  icons: {
+    icon: { url: "/icons/ic_fav.png", type: "image/png" },
+    apple: "/icons/ic_fav.png",
+  },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

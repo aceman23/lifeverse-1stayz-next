@@ -1,24 +1,25 @@
 import { createServerClient } from "@supabase/ssr";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 import { DEMO_COOKIE } from "@/lib/demo";
+import { redirectFor, type OnboardingStatus } from "@/lib/onboarding/routing";
+import { getOnboardingStatus } from "@/lib/onboarding/status";
 
-// Routes anyone can open. Everything else is the app shell and needs a Supabase
-// session or the demo cookie.
-const PUBLIC_PREFIXES = ["/login", "/sign-up", "/onboarding", "/beta", "/auth"];
-
-function isProtected(pathname: string) {
-  return !PUBLIC_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
-}
-
+// Who may open what (rules in src/lib/onboarding/routing.ts):
+// - Signed out: /login, /sign-up, /beta, /auth and the /onboarding?demo=1 wizard.
+// - Signed in, setup unfinished: /onboarding only. The app (/today, ...) opens after step 8.
+// - Signed in, setup finished: the app. /onboarding and /login go to /today.
+// - "Try the demo" cookie: the app with mock data, no onboarding gate.
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  let hasSession = false;
+  let supabase: SupabaseClient | null = null;
+  let signedIn = false;
 
   if (url && key) {
-    const supabase = createServerClient(url, key, {
+    supabase = createServerClient(url, key, {
       cookies: {
         getAll() {
           return request.cookies.getAll();
@@ -33,28 +34,24 @@ export async function proxy(request: NextRequest) {
 
     // Refreshes the session cookie if it has expired.
     const { data } = await supabase.auth.getUser();
-    hasSession = Boolean(data.user);
+    signedIn = Boolean(data.user);
   }
 
-  const isDemo = request.cookies.get(DEMO_COOKIE)?.value === "1";
-  const { pathname } = request.nextUrl;
+  const target = await redirectFor({
+    pathname: request.nextUrl.pathname,
+    demoParam: request.nextUrl.searchParams.get("demo") === "1",
+    signedIn,
+    demoCookie: request.cookies.get(DEMO_COOKIE)?.value === "1",
+    onboardingStatus: (): Promise<OnboardingStatus> =>
+      supabase ? getOnboardingStatus(supabase) : Promise.resolve("unknown"),
+  });
 
-  const redirectTo = (path: string) => {
-    const redirect = NextResponse.redirect(new URL(path, request.url));
-    // Keep any refreshed auth cookies on the redirect.
-    response.cookies.getAll().forEach((cookie) => redirect.cookies.set(cookie));
-    return redirect;
-  };
+  if (!target) return response;
 
-  if (pathname === "/login" && (hasSession || isDemo)) {
-    return redirectTo("/today");
-  }
-
-  if (isProtected(pathname) && !hasSession && !isDemo) {
-    return redirectTo("/login");
-  }
-
-  return response;
+  const redirect = NextResponse.redirect(new URL(target, request.url));
+  // Keep any refreshed auth cookies on the redirect.
+  response.cookies.getAll().forEach((cookie) => redirect.cookies.set(cookie));
+  return redirect;
 }
 
 export const config = {
