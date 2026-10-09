@@ -9,6 +9,46 @@ export function serviceTimeError(row: ServiceRow): string | null {
   return null;
 }
 
+/** The 10 national digits of a US/Canada number, or null if it isn't one. Formatting is ignored. */
+function phoneDigits(value: string): string | null {
+  if (/[^\d\s().+-]/.test(value)) return null;
+  const digits = value.replace(/\D/g, "");
+  const national = digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits;
+  // Area codes never start with 0 or 1.
+  return /^[2-9]\d{9}$/.test(national) ? national : null;
+}
+
+/** Optional field: blank is fine, anything else must be a US/Canada phone number. */
+export function phoneError(value: string): string | null {
+  const v = value.trim();
+  if (!v || phoneDigits(v)) return null;
+  return "Enter a 10-digit US phone number, like (555) 123-4567.";
+}
+
+/** "5551234567" or "+1 555.123.4567" -> "(555) 123-4567". Leaves anything invalid as typed. */
+export function formatPhone(value: string): string {
+  const d = phoneDigits(value.trim());
+  return d ? `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}` : value;
+}
+
+// Dot-separated labels ending in a real-looking TLD (letters, or punycode for non-Latin ones).
+const HOSTNAME_RE = /^(?=.{1,253}$)(?:[a-z\d](?:[a-z\d-]{0,61}[a-z\d])?\.)+(?:[a-z]{2,63}|xn--[a-z\d-]{2,59})$/i;
+
+/** Optional field: blank is fine, anything else must be a web address like gracecommunity.org. */
+export function websiteError(value: string): string | null {
+  const v = value.trim();
+  if (!v) return null;
+  const message = "Enter a website like gracecommunity.org.";
+  if (/\s/.test(v)) return message;
+  try {
+    const url = new URL(/^[a-z][a-z\d+.-]*:\/\//i.test(v) ? v : `https://${v}`);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return message;
+    return HOSTNAME_RE.test(url.hostname) ? null : message;
+  } catch {
+    return message;
+  }
+}
+
 function serviceIsValid(row: ServiceRow) {
   return (
     filled(row.name) && filled(row.day) && filled(row.startTime) && filled(row.endTime) && !serviceTimeError(row)
@@ -19,7 +59,13 @@ function serviceIsValid(row: ServiceRow) {
 export function canContinue(step: number, s: OnboardingState): boolean {
   switch (step) {
     case 0:
-      return filled(s.church.name) && filled(s.church.yourName) && filled(s.church.yourRole);
+      return (
+        filled(s.church.name) &&
+        filled(s.church.yourName) &&
+        filled(s.church.yourRole) &&
+        !phoneError(s.church.phone) &&
+        !websiteError(s.church.website)
+      );
     case 1:
       return s.serviceSchedule.length > 0 && s.serviceSchedule.every(serviceIsValid);
     case 2:
@@ -79,7 +125,7 @@ export function computeReadyCheck(s: OnboardingState): Record<string, CheckStatu
   const reviewed = services.filter((r) => r.reviewed && serviceIsValid(r)).length;
 
   return {
-    church: churchFields.every(filled) ? "green" : churchFields.some(filled) ? "amber" : "gray",
+    church: canContinue(0, s) ? "green" : churchFields.some(filled) ? "amber" : "gray",
     services: services.length === 0 ? "gray" : reviewed === services.length ? "green" : "amber",
     subsplash: int.subsplash !== "none" ? "green" : "gray",
     sms: int.smsStatus === "approved" || int.emailFallbackAcknowledged ? "green" : "amber",
