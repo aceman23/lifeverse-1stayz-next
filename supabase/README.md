@@ -16,7 +16,7 @@ npx supabase db push
 
 ## Onboarding tables
 
-One migration per step of the 8-step `/onboarding` wizard. Each step has a save function the app calls from [`src/lib/onboarding/db.ts`](../src/lib/onboarding/db.ts).
+One migration per step of the 8-step `/onboarding` wizard. Each step has a save function the app calls from [`src/lib/onboarding/db.ts`](../src/lib/onboarding/db.ts). For what the user enters on each step and which column it's saved in, see [`ONBOARDING_DATA.md`](ONBOARDING_DATA.md).
 
 | Migration | Step | Tables | Save function |
 | --- | --- | --- | --- |
