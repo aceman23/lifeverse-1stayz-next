@@ -1,4 +1,5 @@
 import {
+  CONSENT_WORDING,
   DEFAULT_MINISTRIES,
   DOCTRINAL_TOPICS,
   ESCALATION_TOPICS,
@@ -39,7 +40,7 @@ export function createInitialState(): OnboardingState {
     },
     documents: [],
     doctrinalPositions: DOCTRINAL_TOPICS.map((topic, i) => ({ id: `pos-${i}`, topic, stance: "route", wording: "" })),
-    escalationTopics: ESCALATION_TOPICS.map((label, i) => ({ id: `esc-${i}`, label, enabled: true })),
+    escalationTopics: ESCALATION_TOPICS.map((label, i) => ({ id: `esc-${i}`, label, enabled: false })),
     tone: ["Warm"],
     signOff: "",
     guardrailsApprovedBy: null,
@@ -87,6 +88,7 @@ export function createInitialState(): OnboardingState {
     staffAlertsConsent: false,
     selectedTemplate: "warm",
     templates: MESSAGE_TEMPLATES.map((t) => ({ ...t })),
+    consentWording: CONSENT_WORDING,
     mode: null,
     readyCheck: {},
   };

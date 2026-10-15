@@ -33,22 +33,71 @@ function Divider({ label, className }: { label: string; className: string }) {
   );
 }
 
+type OAuthProvider = "google" | "apple";
+
+function GoogleIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
+      <path
+        fill="#4285F4"
+        d="M23.52 12.27c0-.85-.08-1.67-.22-2.45H12v4.64h6.46a5.52 5.52 0 0 1-2.4 3.62v3h3.88c2.27-2.09 3.58-5.17 3.58-8.81z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 24c3.24 0 5.96-1.07 7.94-2.9l-3.88-3.02c-1.07.72-2.45 1.15-4.06 1.15-3.12 0-5.77-2.11-6.71-4.95H1.28v3.11A12 12 0 0 0 12 24z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M5.29 14.28a7.2 7.2 0 0 1 0-4.56V6.61H1.28a12 12 0 0 0 0 10.78l4.01-3.11z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 4.77c1.76 0 3.34.61 4.59 1.8l3.44-3.44A11.97 11.97 0 0 0 12 0 12 12 0 0 0 1.28 6.61l4.01 3.11C6.23 6.88 8.88 4.77 12 4.77z"
+      />
+    </svg>
+  );
+}
+
+function AppleIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor" aria-hidden="true">
+      <path d="M16.37 12.76c-.02-2.3 1.88-3.4 1.96-3.46-1.07-1.56-2.73-1.78-3.32-1.8-1.41-.14-2.76.83-3.47.83-.72 0-1.82-.81-3-.79-1.54.02-2.96.9-3.76 2.28-1.6 2.78-.41 6.9 1.15 9.16.77 1.1 1.68 2.34 2.87 2.3 1.15-.05 1.59-.75 2.98-.75 1.39 0 1.78.75 3 .72 1.24-.02 2.02-1.12 2.78-2.23.88-1.28 1.24-2.52 1.26-2.58-.03-.01-2.42-.93-2.45-3.68zM14.08 6.01c.63-.77 1.06-1.83.94-2.89-.91.04-2.01.61-2.67 1.37-.58.67-1.09 1.76-.96 2.8 1.02.08 2.05-.52 2.69-1.28z" />
+    </svg>
+  );
+}
+
 function hasDemoCookie() {
   return document.cookie.split("; ").some((c) => c === `${DEMO_COOKIE}=1`);
 }
 
 export default function LoginForm() {
   const router = useRouter();
-  const savedParam = useSearchParams().get("saved");
+  const searchParams = useSearchParams();
+  const savedParam = searchParams.get("saved");
+  // ?registered=1 comes from sign-up; those users continue to onboarding after signing in.
+  const justRegistered = searchParams.get("registered") === "1";
   // ?saved=1 comes from onboarding's "Save & exit"; other values are shown as-is.
-  const saved =
-    savedParam === "1" ? "Your setup progress is saved. Sign in to pick up where you left off." : savedParam;
+  const saved = justRegistered
+    ? "Your account is created. Sign in to set up your church."
+    : savedParam === "1"
+      ? "Your setup progress is saved. Sign in to pick up where you left off."
+      : savedParam;
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [oauthLoading, setOauthLoading] = useState<OAuthProvider | null>(null);
+  // From /auth/callback: ?error=confirm when an email link is invalid or expired,
+  // ?error=oauth when a Google or Apple sign-in was cancelled or failed.
+  const errorParam = searchParams.get("error");
+  const [error, setError] = useState<string | null>(
+    errorParam === "confirm"
+      ? "That confirmation link is invalid or has expired. Sign in, or sign up again to get a new link."
+      : errorParam === "oauth"
+        ? "We couldn't sign you in with that account. Please try again."
+        : null,
+  );
 
   // Already signed in (or in demo mode)? Skip the login screen.
   useEffect(() => {
@@ -86,7 +135,8 @@ export default function LoginForm() {
         setLoading(false);
         return;
       }
-      router.push("/today");
+      // The proxy sends anyone whose setup isn't finished to /onboarding, at the saved step.
+      router.push(justRegistered ? "/onboarding" : "/today");
       router.refresh();
     } catch (err) {
       setError(
@@ -98,20 +148,30 @@ export default function LoginForm() {
     }
   }
 
-  function handleJoinPilot() {
+  // Redirects to the provider, which returns to /auth/callback to set the session.
+  // The proxy then sends anyone with unfinished setup to /onboarding.
+  async function handleOAuth(provider: OAuthProvider) {
+    setError(null);
+    setOauthLoading(provider);
     try {
-      Object.keys(localStorage)
-        .filter((key) => key.toLowerCase().includes("onboarding"))
-        .forEach((key) => localStorage.removeItem(key));
-    } catch {
-      // Storage unavailable; nothing to clear.
+      const { error } = await createClient().auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback?next=/today`,
+        },
+      });
+      if (error) {
+        setError(error.message);
+        setOauthLoading(null);
+      }
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Something went wrong. Please try again.",
+      );
+      setOauthLoading(null);
     }
-    router.push("/onboarding");
-  }
-
-  function handleDemo() {
-    document.cookie = `${DEMO_COOKIE}=1; path=/; SameSite=Lax`;
-    router.push("/today");
   }
 
   function handleContactSupport(e: MouseEvent<HTMLAnchorElement>) {
@@ -239,33 +299,34 @@ export default function LoginForm() {
             </button>
           </form>
 
-          <p className="mt-4 text-center text-sm text-ink-2">
+          <Divider label="or" className="my-5" />
+
+          <div className="space-y-3">
+            <button
+              type="button"
+              onClick={() => handleOAuth("google")}
+              disabled={oauthLoading !== null}
+              className="flex h-14 w-full items-center justify-center gap-3 rounded-12 border border-line bg-surface px-5 text-sm font-semibold text-ink transition hover:border-ink-3 disabled:opacity-50"
+            >
+              <GoogleIcon />
+              {oauthLoading === "google" ? "Redirecting…" : "Continue with Google"}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleOAuth("apple")}
+              disabled={oauthLoading !== null}
+              className="flex h-14 w-full items-center justify-center gap-3 rounded-12 bg-black px-5 text-sm font-semibold text-white transition disabled:opacity-50"
+            >
+              <AppleIcon />
+              {oauthLoading === "apple" ? "Redirecting…" : "Continue with Apple"}
+            </button>
+          </div>
+
+          <p className="mt-6 text-center text-sm text-ink-2">
             New to 1Stayz?{" "}
             <Link href="/sign-up" className="font-semibold text-teal-text">
               Create an account
             </Link>
-          </p>
-
-          <Divider label="or" className="my-5" />
-
-          <button
-            type="button"
-            onClick={handleJoinPilot}
-            className="flex h-14 w-full items-center justify-between rounded-12 border-[1.5px] border-teal bg-surface px-5 text-sm font-semibold text-teal-text transition"
-          >
-            Join the Pilot
-            <ArrowRight className="h-5 w-5" aria-hidden="true" />
-          </button>
-
-          <p className="mt-6 text-center text-sm text-ink-2">
-            Just want to look around?{" "}
-            <button
-              type="button"
-              onClick={handleDemo}
-              className="font-semibold text-teal-text"
-            >
-              Try the demo →
-            </button>
           </p>
 
           <Divider label="Need help?" className="mt-8 mb-4" />

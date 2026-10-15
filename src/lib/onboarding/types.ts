@@ -110,6 +110,8 @@ export interface OnboardingState {
 
   selectedTemplate: string;
   templates: MessageTemplate[];
+  /** Connection card consent wording, with a {church_name} placeholder. */
+  consentWording: string;
 
   mode: "shadow" | "live" | null;
   readyCheck: Record<string, CheckStatus>;

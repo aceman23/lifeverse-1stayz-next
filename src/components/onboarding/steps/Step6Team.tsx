@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowDown, ArrowUp, BellRing, Moon, Pencil, Plus, Trash2, Users } from "lucide-react";
+import { ArrowDown, ArrowUp, BellRing, Moon, Pencil, Phone, Plus, Trash2, Users } from "lucide-react";
 import { useOnboarding } from "@/lib/onboarding/context";
 import { makeId } from "@/lib/onboarding/id";
 import type { StaffMember } from "@/lib/onboarding/types";
@@ -9,7 +9,7 @@ import { syncEscalationOrder } from "@/lib/onboarding/validation";
 import Card from "../ui/Card";
 import Checkbox from "../ui/Checkbox";
 import SectionHeader from "../ui/SectionHeader";
-import TextField from "../ui/TextField";
+import TextField, { labelClass } from "../ui/TextField";
 import Toggle from "../ui/Toggle";
 
 const iconButton =
@@ -145,17 +145,41 @@ export default function Step6Team() {
         />
         {state.staffAlertsEnabled && (
           <div className="mt-3 space-y-4">
-            <TextField
-              label="Alert phone number"
-              type="tel"
-              className="sm:max-w-sm"
-              value={state.staffAlertsPhone}
-              onChange={(staffAlertsPhone) => update({ staffAlertsPhone })}
-              placeholder="(555) 123-4567"
-            />
+            {/* Alerts go to the same people as escalations, at the mobile number on their staff record. */}
+            <div>
+              <p className={labelClass}>Select staff who should receive SMS alerts</p>
+              <ul className="space-y-2">
+                {state.staff.map((m) => (
+                  <li key={m.id} className="rounded-xl border border-stone-200 p-3">
+                    <label className="flex min-h-11 cursor-pointer items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={m.receivesEscalations}
+                        onChange={(e) => editMember(m.id, { receivesEscalations: e.target.checked })}
+                        className="h-5 w-5 shrink-0 cursor-pointer rounded accent-[#10B981]"
+                      />
+                      <span className="min-w-0 flex-1 truncate text-sm font-medium text-stone-700">
+                        {m.name || "Unnamed staff member"}
+                      </span>
+                      <span className="shrink-0 text-xs text-stone-400">{m.role}</span>
+                    </label>
+                    {m.receivesEscalations && (
+                      <TextField
+                        label="Mobile number"
+                        icon={Phone}
+                        type="tel"
+                        className="mt-3 pl-8"
+                        value={m.mobile}
+                        onChange={(mobile) => editMember(m.id, { mobile })}
+                        placeholder="(555) 123-4567"
+                      />
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
             <Checkbox checked={state.staffAlertsConsent} onChange={(staffAlertsConsent) => update({ staffAlertsConsent })}>
-              I agree to receive automated escalation alerts by text at this number. Msg & data rates may apply. Reply
-              STOP to opt out.
+              I confirm that selected staff members have consented to receive SMS alerts at their listed mobile numbers.
               {!state.staffAlertsConsent && <span className="font-medium text-amber-700"> Required to continue.</span>}
             </Checkbox>
           </div>

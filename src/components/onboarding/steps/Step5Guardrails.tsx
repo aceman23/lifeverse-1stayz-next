@@ -59,6 +59,9 @@ export default function Step5Guardrails() {
         icon={BookOpen}
         description="For each topic, choose whether your assistant should explain your church's view, route to a pastor, or not discuss it."
       >
+        <p className="mb-4 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
+          Do not click unless you want the rules to be interchangeable.
+        </p>
         <ul className="divide-y divide-stone-100">
           {state.doctrinalPositions.map((p) => (
             <li key={p.id} className="py-3 first:pt-0 last:pb-0">
@@ -106,7 +109,7 @@ export default function Step5Guardrails() {
       <Card
         title="Escalation Topics"
         icon={AlertOctagon}
-        description="When these come up, the assistant immediately routes to a pastor."
+        description="Choose which topics get routed to a pastor immediately."
       >
         <ul className="grid grid-cols-1 gap-x-6 sm:grid-cols-2">
           {state.escalationTopics.map((t) => (
