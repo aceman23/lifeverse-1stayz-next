@@ -22,7 +22,7 @@ export const COACH_CONTENT: Record<number, string> = {
   4: "This is the most important step. If your church holds a specific view on baptism and a guest asks about it, your agent needs to know whether to explain it or hand it to a pastor. These guardrails keep the assistant aligned with your church's beliefs.",
   5: "When someone needs a pastor, 1Stayz needs to know who to contact and in what order. Quiet hours protect your guests from late-night messages in their local time zone.",
   6: "Your first message sets the tone for every conversation. Pick a template, make it yours, and send it to your pastor for approval. The preview shows exactly what a guest will see.",
-  7: "Almost there! Shadow mode means 1Stayz writes every message but holds it for your approval before sending. Go live when you're ready — we'll check that everything is in place.",
+  7: "Almost there! Approval Mode means 1Stayz writes every message but holds it for your approval before sending. Go live when you're ready — we'll check that everything is in place.",
 };
 
 export const TIMEZONES = [

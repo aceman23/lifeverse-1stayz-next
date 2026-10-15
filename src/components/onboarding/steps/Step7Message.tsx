@@ -36,6 +36,12 @@ export default function Step7Message() {
   const approver = state.church.yourName.trim() || "your pastor";
   const status = state.firstMessageStatus;
 
+  // Stored with the {church_name} placeholder and shown with the real name, so renaming the
+  // church in step 1 updates the wording.
+  const consentText = (state.consentWording || CONSENT_WORDING).replaceAll("{church_name}", churchName);
+  const updateConsentWording = (value: string) =>
+    update({ consentWording: value.split(churchName).join("{church_name}") });
+
   const setBody = (next: string) =>
     update((s) => ({
       ...backToDraft(s),
@@ -60,7 +66,7 @@ export default function Step7Message() {
         description="Your first message sets the tone for every conversation. Pick a template, make it yours, and get it approved."
       />
 
-      <Card title="Choose a template">
+      <Card title="Choose tone">
         <SegmentedControl
           label="Message template"
           value={state.selectedTemplate}
@@ -109,9 +115,16 @@ export default function Step7Message() {
       </div>
 
       <Card title="Connection Card Consent Wording" icon={FileSignature}>
-        <blockquote className="rounded-xl bg-stone-50 p-4 text-sm leading-relaxed text-stone-600">
-          {CONSENT_WORDING.replaceAll("{church_name}", churchName)}
-        </blockquote>
+        <textarea
+          value={consentText}
+          onChange={(e) => updateConsentWording(e.target.value)}
+          rows={4}
+          aria-label="Connection Card Consent Wording"
+          className="w-full resize-none rounded-xl border border-transparent bg-stone-50/50 p-4 text-sm leading-relaxed text-stone-600 outline-none transition focus:border-[#10B981] focus:bg-white focus:ring-2 focus:ring-[#10B981]/20"
+        />
+        <p className="mt-2 text-xs text-stone-400">
+          The church name comes from your earlier church information and updates automatically if you change it.
+        </p>
         <div className="mt-4">
           <Checkbox
             checked={state.integrations.consentWordingLive}

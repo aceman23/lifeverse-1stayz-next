@@ -7,7 +7,7 @@ import { LAST_STEP, STORAGE_KEY } from "./constants";
 import { finishOnboarding, loadOnboarding, saveSteps } from "./db";
 import { createDemoState, createInitialState } from "./initial-state";
 import type { OnboardingState, StatePatch } from "./types";
-import { canContinue, canGoToStep, computeReadyCheck } from "./validation";
+import { computeReadyCheck, isStepComplete } from "./validation";
 
 // Onboarding progress lives in Supabase only (see supabase/README.md). The wizard needs a
 // signed-in user; src/proxy.ts sends everyone else to /login. The ?demo=1 wizard is the one
@@ -36,13 +36,6 @@ interface OnboardingContextValue {
 const OnboardingContext = createContext<OnboardingContextValue | null>(null);
 
 const clampStep = (step: number) => Math.min(Math.max(Math.round(step) || 0, 0), LAST_STEP);
-
-/** The furthest step at or before `step` whose earlier steps are all complete. */
-function reachableStep(step: number, s: OnboardingState) {
-  let target = clampStep(step);
-  while (target > 0 && !canGoToStep(target, s)) target--;
-  return target;
-}
 
 const isDemo = () => new URLSearchParams(window.location.search).get("demo") === "1";
 
@@ -79,7 +72,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
           if (saved) {
             lastSavedStep.current = saved.lastSavedStep;
             const merged = { ...next, ...saved.patch };
-            next = { ...merged, currentStep: reachableStep(saved.currentStep, merged) };
+            next = { ...merged, currentStep: clampStep(saved.currentStep) };
           }
         } catch (err) {
           // Don't show an empty wizard: saving it would overwrite what's in the database.
@@ -116,9 +109,9 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
    */
   const saveToDb = useCallback(async (s: OnboardingState, resumeStep: number) => {
     if (isDemo()) return true;
-    // Without a valid step 1 there's no church to save anything against. Navigation can't
-    // leave step 1 until it's valid, so this only happens on Save & exit from step 1.
-    if (!canContinue(0, s)) {
+    // Without a valid step 1 there's no church to save anything against, so leaving step 1
+    // (Continue, the progress bar, Save & exit) stays put until it's filled in.
+    if (!isStepComplete(0, s)) {
       setSaveError("Fill in your church name, your name and your role first, so there's something to save.");
       return false;
     }

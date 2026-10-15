@@ -4,6 +4,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
 import { WorkspaceProvider } from "@/lib/workspace-context";
 import { cn } from "@/lib/cn";
+import ChatWidget from "../ChatWidget";
 import { ToastProvider } from "../ui/Toast";
 import Header from "./Header";
 import Sidebar from "./Sidebar";
@@ -94,6 +95,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             {children}
           </main>
         </div>
+        <ChatWidget context="dashboard" />
       </div>
       </ToastProvider>
     </WorkspaceProvider>

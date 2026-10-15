@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
-import { LAST_STEP, TIMEZONES } from "./constants";
+import { CONSENT_WORDING, LAST_STEP, TIMEZONES } from "./constants";
 import type {
   DoctrinalStance,
   EmailProvider,
@@ -120,6 +120,7 @@ interface ChurchRow {
     status: FirstMessageStatus;
     approved_by: string | null;
     approved_at: string | null;
+    consent_wording: string | null;
   }>;
 }
 
@@ -150,7 +151,7 @@ const ONBOARDING_SELECT = `
     church_team_settings (quiet_hours_start, quiet_hours_end, staff_alerts_enabled,
       staff_alerts_phone, staff_alerts_consent),
     church_message_templates (client_id, name, body, position),
-    church_first_message (selected_template, status, approved_by, approved_at)
+    church_first_message (selected_template, status, approved_by, approved_at, consent_wording)
   )`;
 
 export interface SavedOnboarding {
@@ -284,6 +285,7 @@ export async function loadOnboarding(): Promise<SavedOnboarding | null> {
       firstMessageStatus: firstMessage.status,
       firstMessageApprovedBy: firstMessage.approved_by,
       firstMessageApprovedAt: firstMessage.approved_at,
+      consentWording: firstMessage.consent_wording ?? CONSENT_WORDING,
       templates: byPosition(c.church_message_templates).map((r) => ({ id: r.client_id, name: r.name, body: r.body })),
     } satisfies Partial<OnboardingState>);
   }
@@ -362,6 +364,7 @@ async function saveOne(supabase: SupabaseClient, step: number, s: OnboardingStat
         p_approved_by: s.firstMessageApprovedBy,
         p_approved_at: s.firstMessageApprovedAt,
         p_consent_wording_live: s.integrations.consentWordingLive,
+        p_consent_wording: s.consentWording,
       });
     default:
       return { error: null };

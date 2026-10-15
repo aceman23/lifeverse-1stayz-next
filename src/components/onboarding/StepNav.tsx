@@ -2,12 +2,11 @@
 
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { useOnboarding } from "@/lib/onboarding/context";
-import { canContinue } from "@/lib/onboarding/validation";
 
+// Continue is always enabled: steps can be finished in any order. The Ready Check shows what's left.
 export default function StepNav() {
   const { state, saving, nextStep, prevStep } = useOnboarding();
   const step = state.currentStep;
-  const enabled = canContinue(step, state);
 
   return (
     <div className="mt-8 flex items-center justify-between">
@@ -23,7 +22,7 @@ export default function StepNav() {
       <button
         type="button"
         onClick={nextStep}
-        disabled={!enabled || saving}
+        disabled={saving}
         className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#1a2e2a] px-5 text-sm font-medium text-white transition-colors hover:bg-[#245045] disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-400"
       >
         {saving ? "Saving…" : "Continue"}
