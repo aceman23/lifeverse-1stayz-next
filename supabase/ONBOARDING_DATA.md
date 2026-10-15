@@ -10,6 +10,7 @@ The app calls one save function (RPC) per step from `saveOne()` in [`src/lib/onb
 
 ## How saving works
 
+- Continue is always enabled and every step can be opened from the progress bar, so steps can be done in any order. The one exception is step 1: nothing can be saved until the church name, your name and role are filled in, so the wizard stays on step 1 until they are. The "What the app checks" notes below are shown as hints and feed the Ready Check; they no longer block Continue.
 - A step is saved when the user leaves it (Continue, Back, the progress bar, or Save & exit). After that save the app calls `set_onboarding_step(p_step)`, which stores the step to resume at in `onboarding_progress.current_step`.
 - Each save function finds the church through `onboarding_church_id()`: the church the signed-in user owns (`church_members.is_owner = true`). Every step after step 1 fails with "Save step 1 (Your Church) first." if there isn't one yet.
 - A save replaces all of that step's data. One-row-per-church tables are upserted. List tables (services, documents, staff, ...) are deleted and inserted again in the order the app sends.
@@ -67,7 +68,7 @@ When the user first opens this step, the app pretends to scan the website. It do
 
 What the app checks:
 
-- Continue needs at least one service, and every service needs a name, day, start and end time.
+- A service is complete when it has a name, day, start and end time.
 - The end time must be after the start time.
 
 The database doesn't check start < end, because unfinished drafts are also saved when the user goes Back.
@@ -113,7 +114,7 @@ Notes:
 | Training Documents (upload `.pdf`, `.docx`, `.txt`, `.md`) | `documents[]` (`name`, `type`) | `church_documents.name`, and the file extension (e.g. `pdf`) in `church_documents.mime_type` |
 | Doctrinal Positions → Explain / Route to pastor / Skip, one per topic (Baptism, Communion, …) | `doctrinalPositions[].topic`, `.stance` | `church_doctrinal_positions.topic`, `.stance`: `explain`, `route` or `skip` (default `route`) |
 | Doctrinal Positions → "Approved wording for …" (only shown for Explain) | `doctrinalPositions[].wording` | `church_doctrinal_positions.wording` (up to 4000 chars) |
-| Escalation Topics (on/off toggles: Crisis or self-harm, Medical or grief, …) | `escalationTopics[].label`, `.enabled` | `church_escalation_topics.label`, `.enabled` |
+| Escalation Topics (on/off toggles: Crisis or self-harm, Medical or grief, …; all off until the user picks them) | `escalationTopics[].label`, `.enabled` | `church_escalation_topics.label`, `.enabled` |
 | Tone (chips: Warm, Casual, Formal, Joyful, Pastoral) | `tone` | `church_guardrails.tone` (`text[]`) |
 | Sign-off | `signOff` | `church_guardrails.sign_off` |
 | "Approve as {Your name}" / Undo | `guardrailsApprovedBy`, `guardrailsApprovedAt` | `church_guardrails.approved_by`, `approved_at` |
@@ -125,7 +126,7 @@ Notes:
   - `approved_by` is the "Your name" value from step 1, and `approved_at` is the time of the click in the browser.
   - The two columns are either both set or both `NULL`, enforced by a check constraint.
   - Undo clears both.
-  - Continue needs the guardrails approved.
+  - Go Live needs the guardrails approved.
 - **Locked Rules** are shown on this step but are fixed in the app and never saved.
 
 ## Step 6 · Team & Escalations
@@ -140,8 +141,10 @@ Notes:
 | Escalation Order (up/down arrows) | `escalationOrder` (staff ids) | `church_staff.escalation_rank`: 1 = contacted first; `NULL` for staff with Escalations off |
 | Quiet Hours → Start / End | `quietHoursStart`, `quietHoursEnd` | `church_team_settings.quiet_hours_start`, `quiet_hours_end` (`time`, in the guest's local time) |
 | "Enable SMS alerts to staff when escalations occur" | `staffAlertsEnabled` | `church_team_settings.staff_alerts_enabled` |
-| Alert phone number | `staffAlertsPhone` | `church_team_settings.staff_alerts_phone` |
-| "I agree to receive automated escalation alerts by text…" | `staffAlertsConsent` | `church_team_settings.staff_alerts_consent` |
+| Staff Alerts → "Select staff who should receive SMS alerts" checkboxes | `staff[].receivesEscalations` (same flag as the Escalations toggle) | `church_staff.receives_escalations` |
+| Staff Alerts → Mobile number (per selected staff member) | `staff[].mobile` | `church_staff.mobile` |
+| *(no UI any more)* | `staffAlertsPhone` | `church_team_settings.staff_alerts_phone`: kept for older saves; the per-staff mobile numbers replace it |
+| "I confirm that selected staff members have consented to receive SMS alerts…" | `staffAlertsConsent` | `church_team_settings.staff_alerts_consent` |
 | *(set by the database)* | — | `church_team_settings.staff_alerts_consented_at`: the first time consent was saved, cleared if consent is withdrawn; kept for SMS compliance |
 
 Notes:
@@ -149,19 +152,20 @@ Notes:
 - Staff are contacts, not 1Stayz logins, so they aren't added to `church_members`.
 - The staff list starts with three sample people (Pastor Ray, Sarah Chen, Mike Johnson). These are saved like any other entries unless the user edits or removes them.
 - The app doesn't check the format of staff mobile numbers, emails or the alert phone number.
-- Continue needs at least one person with Escalations on, and consent ticked when staff alerts are on.
+- Go Live needs at least one person with Escalations on. The consent box shows "Required to continue" when staff alerts are on, but doesn't block Continue.
 
 ## Step 7 · First Message
 
-**Save function:** `save_onboarding_first_message(p_templates, p_selected_template, p_status, p_approved_by, p_approved_at, p_consent_wording_live)`
+**Save function:** `save_onboarding_first_message(p_templates, p_selected_template, p_status, p_approved_by, p_approved_at, p_consent_wording_live, p_consent_wording)`
 **Tables:** `church_message_templates` (one row per template), `church_first_message` (one row per church), plus one column in `church_integrations`
 
 | UI | State | Column |
 | --- | --- | --- |
-| Choose a template (Warm welcome / Short & simple / Family-focused) | `selectedTemplate` | `church_first_message.selected_template` (`warm`, `short` or `family`) |
+| Choose tone (Warm welcome / Short & simple / Family-focused) | `selectedTemplate` | `church_first_message.selected_template` (`warm`, `short` or `family`) |
 | Message text (edits the selected template) | `templates[].body` | `church_message_templates.body` (up to 2000 chars); `client_id` is the template key and `name` its title |
 | Send to pastor → Mark approved (demo) | `firstMessageStatus` | `church_first_message.status`: `draft` → `awaiting` → `approved` |
 | *(set on approval)* | `firstMessageApprovedBy`, `firstMessageApprovedAt` | `church_first_message.approved_by`, `approved_at`; only stored while the status is `approved` |
+| Connection Card Consent Wording (editable text) | `consentWording` | `church_first_message.consent_wording`: stored with a `{church_name}` placeholder, which the app fills in from step 1; `NULL` means the default `CONSENT_WORDING` |
 | "This wording is live on our connection card." | `integrations.consentWordingLive` | `church_integrations.consent_wording_live` |
 
 Notes:
@@ -169,8 +173,8 @@ Notes:
 - All three templates are saved, including the ones that weren't picked, so edits to any of them are kept.
 - Changing the template or the text after sending or approving puts the status back to `draft` and clears the approval.
 - The app won't send the message for approval unless it contains "Reply STOP to opt out".
-- Continue needs the status to be `approved`.
-- The consent wording itself is fixed in the app. Only the "it's live" checkbox is stored.
+- Go Live needs the status to be `approved`.
+- The church name inside the consent wording is swapped for `{church_name}` before saving, so renaming the church in step 1 updates it.
 
 ## Step 8 · Ready Check
 
@@ -179,12 +183,12 @@ Notes:
 
 | UI | Saved |
 | --- | --- |
-| Start in Shadow Mode / Go Live | `onboarding_progress.mode` = `shadow` or `live`, `completed = true`, `completed_at` (first time only), `current_step = last_saved_step = 7` |
+| Start in Approval Mode / Go Live | `onboarding_progress.mode` = `shadow` or `live`, `completed = true`, `completed_at` (first time only), `current_step = last_saved_step = 7` |
 
 Notes:
 
 - The setup checklist on this step isn't stored. The app works it out from the other steps each time (`computeReadyCheck()` in [`validation.ts`](../src/lib/onboarding/validation.ts)).
-- Go Live is only enabled when every checklist item is green. Shadow mode is always available.
+- Go Live is only enabled when every checklist item is green. Approval Mode (stored as `shadow`) is always available.
 - Once `completed = true`, the app treats onboarding as finished: `/onboarding` redirects to `/today`.
 
 ---

@@ -55,8 +55,11 @@ function serviceIsValid(row: ServiceRow) {
   );
 }
 
-/** Whether the Continue button is enabled on `step` (0-based). */
-export function canContinue(step: number, s: OnboardingState): boolean {
+/**
+ * Whether `step` (0-based) is filled in. Navigation isn't gated on this any more; it feeds the
+ * Ready Check, and step 1 must be complete before anything can be saved.
+ */
+export function isStepComplete(step: number, s: OnboardingState): boolean {
   switch (step) {
     case 0:
       return (
@@ -85,14 +88,6 @@ export function canContinue(step: number, s: OnboardingState): boolean {
     default:
       return false;
   }
-}
-
-/** A step can be opened from the progress bar once every step before it is complete. */
-export function canGoToStep(target: number, s: OnboardingState): boolean {
-  for (let i = 0; i < target; i++) {
-    if (!canContinue(i, s)) return false;
-  }
-  return true;
 }
 
 /** Ids of staff who receive escalations, in escalation order. Fixes up a stale or partial order. */
@@ -125,7 +120,7 @@ export function computeReadyCheck(s: OnboardingState): Record<string, CheckStatu
   const reviewed = services.filter((r) => r.reviewed && serviceIsValid(r)).length;
 
   return {
-    church: canContinue(0, s) ? "green" : churchFields.some(filled) ? "amber" : "gray",
+    church: isStepComplete(0, s) ? "green" : churchFields.some(filled) ? "amber" : "gray",
     services: services.length === 0 ? "gray" : reviewed === services.length ? "green" : "amber",
     subsplash: int.subsplash !== "none" ? "green" : "gray",
     sms: int.smsStatus === "approved" || int.emailFallbackAcknowledged ? "green" : "amber",

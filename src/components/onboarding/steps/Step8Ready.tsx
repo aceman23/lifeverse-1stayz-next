@@ -57,7 +57,7 @@ export default function Step8Ready() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="flex flex-col rounded-2xl border border-[#ECECE8] bg-white p-5">
           <Eye className="mb-3 h-5 w-5 text-stone-400" aria-hidden="true" />
-          <h3 className="text-sm font-semibold text-stone-900">Shadow Mode</h3>
+          <h3 className="text-sm font-semibold text-stone-900">Approval Mode</h3>
           <p className="mt-1 mb-4 flex-1 text-sm text-stone-600">
             1Stayz writes every message but holds it for your approval before sending. Review at your own pace.
           </p>
@@ -67,7 +67,7 @@ export default function Step8Ready() {
             disabled={saving}
             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#1a2e2a] px-5 text-sm font-medium text-white transition-colors hover:bg-[#245045] disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Start in Shadow Mode
+            Start in Approval Mode
           </button>
         </div>
 
@@ -75,7 +75,7 @@ export default function Step8Ready() {
           <Rocket className="mb-3 h-5 w-5 text-stone-400" aria-hidden="true" />
           <h3 className="text-sm font-semibold text-stone-900">Live Mode</h3>
           <p className="mt-1 mb-4 flex-1 text-sm text-stone-600">
-            1Stayz sends messages automatically. You can switch back to shadow mode anytime.
+            1Stayz sends messages automatically. You can switch back to Approval Mode anytime.
           </p>
           <div className="group relative">
             <button

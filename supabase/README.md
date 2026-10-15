@@ -28,6 +28,7 @@ One migration per step of the 8-step `/onboarding` wizard. Each step has a save 
 | `…120500_onboarding_step6_team.sql` | 6 · Team & Escalations | `church_staff`, `church_team_settings` | `save_onboarding_team()` |
 | `…120600_onboarding_step7_first_message.sql` | 7 · First Message | `church_message_templates`, `church_first_message` | `save_onboarding_first_message()` |
 | `…120700_onboarding_step8_ready.sql` | 8 · Ready Check | adds `onboarding_progress.mode` | `finish_onboarding()` |
+| `20261014120000_onboarding_step7_consent_wording.sql` | 7 · First Message | adds `church_first_message.consent_wording` | `save_onboarding_first_message()` (gains `p_consent_wording`) |
 
 Step 2 also adds the helpers the later steps share: `onboarding_church_id()`, `onboarding_mark_saved()` and `set_onboarding_step()`.
 
