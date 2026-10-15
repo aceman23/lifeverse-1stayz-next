@@ -7,7 +7,7 @@ const SUGGESTIONS: Record<string, string> = {
   "What is Agentic AI digital assistants?":
     "Agentic AI digital assistants are AI helpers that act on your behalf. In 1Stayz, they follow up with each first-time guest through personal, timely messages so nobody slips through the cracks.",
   "How do I get access?":
-    "1Stayz is currently in a pilot. Tap “Join the Pilot” on this page to get started, or use “Try the demo” to look around first.",
+    "1Stayz is currently in a pilot. Tap “Create an account” on this page, or continue with Google or Apple, to get started.",
   "What does this system do?":
     "1Stayz helps your church retain first-time visitors. It keeps track of new guests and engages each one with personalized follow-up that feels genuinely human.",
   "Is my church's data secure?":
