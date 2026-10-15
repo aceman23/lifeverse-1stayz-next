@@ -2,10 +2,15 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 
-// Landing route for Supabase email links (sign-up confirmation). Exchanges the
-// link's code or token for a session cookie, then continues to `next`.
+// Landing route for Supabase email links (sign-up confirmation) and Google/Apple
+// sign-in. Exchanges the code or token for a session cookie, then continues to `next`.
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = request.nextUrl;
+
+  // A cancelled or failed Google/Apple sign-in comes back as ?error=...
+  if (searchParams.get("error")) {
+    return NextResponse.redirect(new URL("/login?error=oauth", origin));
+  }
   const code = searchParams.get("code");
   const tokenHash = searchParams.get("token_hash");
   const type = searchParams.get("type") as EmailOtpType | null;
