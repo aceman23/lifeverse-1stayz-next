@@ -7,8 +7,9 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 export const metadata: Metadata = {
   title: "1Stayz by Lifeverse",
   icons: {
-    icon: { url: "/icons/ic_fav.png", type: "image/png" },
-    apple: "/icons/ic_fav.png",
+    icon: { url: "/icons/favicon.ico", type: "image/x-icon" },
+    // iOS home-screen icons must be PNG; .ico isn't supported there.
+    apple: "/icons/ic_fav_lifeverse.png",
   },
 };
 
