@@ -8,6 +8,7 @@ import { AlertCircle, ArrowRight, Eye, EyeOff } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/cn";
 import AuthSidePanel from "@/components/auth/AuthSidePanel";
+import OAuthButtons from "@/components/auth/OAuthButtons";
 import TextField from "@/components/ui/TextField";
 import { MIN_PASSWORD, getStrength, passwordScore, validate, type AuthErrors } from "@/lib/auth/validation";
 
@@ -25,7 +26,7 @@ type Action =
   | { type: "field"; field: "name" | "email" | "password"; value: string }
   | { type: "togglePassword" }
   | { type: "submit" }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string | null };
 
 const initialState: State = {
   name: "",
@@ -196,6 +197,14 @@ export default function SignUpForm() {
               <ArrowRight className="h-5 w-5" aria-hidden="true" />
             </button>
           </form>
+
+          <div className="relative my-5 flex items-center justify-center">
+            <div className="absolute inset-x-0 top-1/2 h-px bg-line" aria-hidden="true" />
+            <span className="relative bg-bg px-3 text-xs text-ink-3">or</span>
+          </div>
+
+          {/* New Google/Apple users skip the sign-in step and go straight to setup. */}
+          <OAuthButtons next="/onboarding" onError={(message) => dispatch({ type: "error", message })} />
 
           <p className="mt-6 text-center text-sm text-ink-2">
             Already have an account?{" "}

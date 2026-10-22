@@ -14,6 +14,15 @@ npx supabase db push
 
 **Dashboard:** open the project's SQL Editor, paste each new migration in order, and run it.
 
+## User profiles
+
+`20261016120000_profiles.sql` adds `public.profiles`, one row per user in `auth.users`:
+
+- A trigger on `auth.users` (`on_auth_user_created`) creates the row on sign-up, however the user signed up: email and password, Google or Apple. The app never inserts it. Users who signed up before this migration are backfilled.
+- `role` is the app-wide permission level: `'user'` (the default) or `'admin'`. It's a different thing from `church_members.role`, which is a job title.
+- `full_name` and `avatar_url` come from the sign-up metadata (Google sends both; Apple sends a name only on the first sign-in). `email` follows changes to `auth.users.email`.
+- Users can read their own row and change only `full_name` and `avatar_url`. Nobody can insert, delete or change `role` or `email` through the API. To make someone an admin, run `update public.profiles set role = 'admin' where email = '...';` in the SQL Editor.
+
 ## Onboarding tables
 
 One migration per step of the 8-step `/onboarding` wizard. Each step has a save function the app calls from [`src/lib/onboarding/db.ts`](../src/lib/onboarding/db.ts). For what the user enters on each step and which column it's saved in, see [`ONBOARDING_DATA.md`](ONBOARDING_DATA.md).

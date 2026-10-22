@@ -8,3 +8,7 @@ next-env.d.ts
 .env*.local
 .env.staging
 .DS_Store
+
+# Supabase CLI local state (linked project, versions, local stack)
+supabase/.temp/
+supabase/.branches/
