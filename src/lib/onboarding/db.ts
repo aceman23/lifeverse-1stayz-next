@@ -1,7 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { PilotBlockedError, pilotBlockFromError, type PilotAccess } from "@/lib/pilot";
 import { createClient } from "@/lib/supabase/client";
 import { CONSENT_WORDING, LAST_STEP, TIMEZONES } from "./constants";
 import type {
+  PolicyDetails,
+  SmsPolicyHosting,
   DoctrinalStance,
   EmailProvider,
   FirstMessageStatus,
@@ -9,7 +12,7 @@ import type {
   SmsStatus,
   SubsplashMethod,
 } from "./types";
-import { syncEscalationOrder } from "./validation";
+import { emailError, policyUrlError, syncEscalationOrder } from "./validation";
 
 // Supabase reads and writes for onboarding. Tables and save functions are defined in
 // supabase/migrations/*_onboarding_step*.sql, one migration per step. Supabase is the only place
@@ -80,6 +83,17 @@ interface ChurchRow {
     shadow_sunday_acknowledged: boolean;
     shadow_sunday_completed: boolean;
   }>;
+  church_sms_policies: OneOrMany<{
+    hosting: SmsPolicyHosting;
+    terms_url: string | null;
+    privacy_url: string | null;
+    contact_email: string | null;
+    slug: string | null;
+    template_version: number | null;
+    snapshot: PolicyDetails | null;
+    approved_by_name: string | null;
+    approved_at: string | null;
+  }>;
   church_guardrails: OneOrMany<{
     tone: string[];
     sign_off: string | null;
@@ -142,6 +156,8 @@ const ONBOARDING_SELECT = `
     church_needs (needs, other_need),
     church_integrations (subsplash, email_provider, sms_status, email_fallback_acknowledged,
       consent_wording_live, shadow_sunday_acknowledged, shadow_sunday_completed),
+    church_sms_policies (hosting, terms_url, privacy_url, contact_email, slug, template_version, snapshot,
+      approved_by_name, approved_at),
     church_guardrails (tone, sign_off, approved_by, approved_at),
     church_documents (client_id, name, mime_type, position),
     church_doctrinal_positions (client_id, topic, stance, wording, position),
@@ -233,6 +249,21 @@ export async function loadOnboarding(): Promise<SavedOnboarding | null> {
     };
   }
 
+  const smsPolicy = one(c.church_sms_policies);
+  if (smsPolicy) {
+    patch.smsPolicy = {
+      hosting: smsPolicy.hosting,
+      termsUrl: smsPolicy.terms_url ?? "",
+      privacyUrl: smsPolicy.privacy_url ?? "",
+      contactEmail: smsPolicy.contact_email ?? "",
+      slug: smsPolicy.slug,
+      approvedBy: smsPolicy.approved_by_name,
+      approvedAt: smsPolicy.approved_at,
+      templateVersion: smsPolicy.template_version,
+      approvedSnapshot: smsPolicy.snapshot,
+    };
+  }
+
   if (guardrails) {
     Object.assign(patch, {
       tone: guardrails.tone,
@@ -301,6 +332,18 @@ export async function loadOnboarding(): Promise<SavedOnboarding | null> {
   };
 }
 
+/**
+ * Whether the signed-in user may create a church (public.my_pilot_access), or null if signed out.
+ * Throws if the check fails.
+ */
+export async function loadPilotAccess(): Promise<PilotAccess | null> {
+  const session = await signedIn();
+  if (!session) return null;
+  const { data, error } = await session.supabase.rpc("my_pilot_access");
+  if (error) throw new Error(`Couldn't check your pilot access: ${error.message}`);
+  return data as PilotAccess;
+}
+
 // ---------------------------------------------------------------------------
 // Save
 // ---------------------------------------------------------------------------
@@ -327,8 +370,8 @@ async function saveOne(supabase: SupabaseClient, step: number, s: OnboardingStat
       });
     case 2:
       return supabase.rpc("save_onboarding_needs", { p_needs: s.needs, p_other_need: s.otherNeed });
-    case 3:
-      return supabase.rpc("save_onboarding_systems", {
+    case 3: {
+      const systems = await supabase.rpc("save_onboarding_systems", {
         p_subsplash: s.integrations.subsplash,
         p_email_provider: s.integrations.email,
         p_sms_status: s.integrations.smsStatus,
@@ -336,6 +379,16 @@ async function saveOne(supabase: SupabaseClient, step: number, s: OnboardingStat
         p_shadow_sunday_acknowledged: s.integrations.shadowSundayAcknowledged,
         p_shadow_sunday_completed: s.integrations.shadowSundayCompleted,
       });
+      if (systems.error) return systems;
+      // Only valid links are sent; the card shows what's wrong with the others.
+      const p = s.smsPolicy;
+      return supabase.rpc("save_onboarding_sms_policy", {
+        p_hosting: p.hosting,
+        p_terms_url: policyUrlError(p.termsUrl) ? null : p.termsUrl.trim(),
+        p_privacy_url: policyUrlError(p.privacyUrl) ? null : p.privacyUrl.trim(),
+        p_contact_email: emailError(p.contactEmail) ? null : p.contactEmail.trim(),
+      });
+    }
     case 4:
       return supabase.rpc("save_onboarding_guardrails", {
         p_documents: s.documents,
@@ -390,7 +443,12 @@ export async function saveSteps(
 
   for (let i = Math.min(lastSavedStep + 1, step); i <= step; i++) {
     const { error } = await saveOne(session.supabase, i, s);
-    if (error) throw new Error(`Couldn't save your progress: ${error.message}`);
+    if (error) {
+      // Step 1 refuses to create a church for emails that aren't approved (or confirmed).
+      const block = i === 0 ? pilotBlockFromError(error.message) : null;
+      if (block) throw new PilotBlockedError(block);
+      throw new Error(`Couldn't save your progress: ${error.message}`);
+    }
   }
 
   const saved = Math.max(lastSavedStep, Math.min(step, LAST_STEP - 1));
@@ -405,4 +463,27 @@ export async function finishOnboarding(mode: "shadow" | "live"): Promise<void> {
   if (!session) return;
   const { error } = await session.supabase.rpc("finish_onboarding", { p_mode: mode });
   if (error) throw new Error(`Couldn't finish setup: ${error.message}`);
+}
+
+export interface SmsPolicyApproval {
+  slug: string;
+  template_version: number;
+  snapshot: PolicyDetails;
+  approved_by_name: string | null;
+  approved_at: string;
+}
+
+/**
+ * Approves the 1Stayz-hosted SMS Terms and Privacy Policy and publishes them, written with the
+ * church's saved details. Returns null when no one is signed in. Throws if it fails.
+ */
+export async function approveSmsPolicy(contactEmail: string, templateVersion: number): Promise<SmsPolicyApproval | null> {
+  const session = await signedIn();
+  if (!session) return null;
+  const { data, error } = await session.supabase.rpc("approve_sms_policy", {
+    p_contact_email: contactEmail.trim(),
+    p_template_version: templateVersion,
+  });
+  if (error) throw new Error(error.code === "22023" ? error.message : `Couldn't publish: ${error.message}`);
+  return data as SmsPolicyApproval;
 }

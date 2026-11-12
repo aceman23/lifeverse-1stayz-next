@@ -1,15 +1,15 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { fullName, getPerson } from "@/data/people";
+import { getPersonConversation } from "@/lib/inbox/server";
+import { getPerson } from "@/lib/people/server";
 import PersonPage from "@/views/PersonPage";
 
-export async function generateMetadata({ params }: PageProps<"/people/[id]">): Promise<Metadata> {
-  const person = getPerson((await params).id);
-  return { title: `${person ? fullName(person) : "Guest"} · 1Stayz` };
-}
+// Guest names stay out of the tab title: it ends up in browser history and screen shares.
+export const metadata: Metadata = { title: "Guest · 1Stayz" };
 
 export default async function Page({ params }: PageProps<"/people/[id]">) {
-  const person = getPerson((await params).id);
-  if (!person) notFound();
-  return <PersonPage person={person} />;
+  const result = await getPerson((await params).id);
+  if (result.kind === "not-found") notFound();
+  const conversation = await getPersonConversation(result.person.id, result.person.demo);
+  return <PersonPage key={result.person.id} person={result.person} conversation={conversation} />;
 }

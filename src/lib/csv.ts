@@ -1,7 +1,10 @@
 type Cell = string | number | boolean | null | undefined;
 
 function escape(cell: Cell) {
-  const s = cell === null || cell === undefined ? "" : String(cell);
+  let s = cell === null || cell === undefined ? "" : String(cell);
+  // Text that a spreadsheet would run as a formula (a guest can write "=HYPERLINK(...)") is
+  // prefixed with ' so it opens as plain text. Numbers are left as they are.
+  if (typeof cell === "string" && /^[=+\-@\t\r]/.test(s)) s = `'${s}`;
   return /[",\n\r]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s;
 }
 

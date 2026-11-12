@@ -1,3 +1,5 @@
+import type { PolicyDetails } from "@/lib/sms-policy/templates";
+
 export interface ChurchProfile {
   name: string;
   website: string;
@@ -61,6 +63,25 @@ export type SmsStatus = "submitted" | "pending" | "approved";
 export type FirstMessageStatus = "draft" | "awaiting" | "approved";
 export type CheckStatus = "green" | "amber" | "gray";
 
+export type SmsPolicyHosting = "church_site" | "1stayz";
+
+/** The church's public SMS Terms and Privacy Policy (carriers require both for 10DLC). */
+export interface SmsPolicy {
+  hosting: SmsPolicyHosting | null;
+  /** church_site: the church's own public pages. */
+  termsUrl: string;
+  privacyUrl: string;
+  /** 1stayz: where guests reach the church about texts. */
+  contactEmail: string;
+  /** 1stayz: set on first approval, then fixed (the URLs are registered with carriers). */
+  slug: string | null;
+  approvedBy: string | null;
+  approvedAt: string | null;
+  templateVersion: number | null;
+  /** The church details the approved documents were written with. */
+  approvedSnapshot: PolicyDetails | null;
+}
+
 export interface Integrations {
   subsplash: SubsplashMethod;
   email: EmailProvider;
@@ -87,6 +108,7 @@ export interface OnboardingState {
   otherNeed: string;
 
   integrations: Integrations;
+  smsPolicy: SmsPolicy;
 
   documents: UploadedDocument[];
   doctrinalPositions: DoctrinalPosition[];
@@ -116,5 +138,7 @@ export interface OnboardingState {
   mode: "shadow" | "live" | null;
   readyCheck: Record<string, CheckStatus>;
 }
+
+export type { PolicyDetails };
 
 export type StatePatch = Partial<OnboardingState> | ((state: OnboardingState) => Partial<OnboardingState>);

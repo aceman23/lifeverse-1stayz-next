@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
+import type { WorkspaceSummary } from "@/lib/church/types";
 import { WorkspaceProvider } from "@/lib/workspace-context";
 import { cn } from "@/lib/cn";
 import ChatWidget from "../ChatWidget";
@@ -45,7 +46,7 @@ function setCollapsed(value: boolean) {
   window.dispatchEvent(new Event(COLLAPSED_EVENT));
 }
 
-export default function AppShell({ children }: { children: React.ReactNode }) {
+export default function AppShell({ workspace, children }: { workspace: WorkspaceSummary; children: React.ReactNode }) {
   // Mobile: off-canvas drawer. Desktop (md+): docked sidebar that can be collapsed.
   const [menuOpen, setMenuOpen] = useState(false);
   const pathname = usePathname();
@@ -75,14 +76,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <WorkspaceProvider>
+    <WorkspaceProvider summary={workspace}>
       <ToastProvider>
       <div className="app-shell min-h-screen overflow-x-clip bg-bg text-ink">
         <Sidebar open={drawerOpen} collapsed={collapsed} onClose={() => setMenuOpen(false)} />
         <div
           className={cn(
             "flex min-h-screen min-w-0 flex-col transition-[padding] duration-200 ease-out",
-            collapsed ? "md:pl-0" : "md:pl-56",
+            collapsed ? "md:pl-0" : "md:pl-64",
           )}
         >
           <Header onToggleMenu={toggleMenu} menuOpen={isDesktop ? !collapsed : drawerOpen} />

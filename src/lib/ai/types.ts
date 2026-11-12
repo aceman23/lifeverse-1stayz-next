@@ -25,6 +25,18 @@ export interface CompletionRequest {
   maxTokens?: number;
   temperature?: number;
   timeoutMs?: number;
+  /**
+   * The prompt holds guest data (a guest's message, name, facts). Refused for real providers
+   * until AI_ALLOW_GUEST_DATA=1, which is set only once the provider's data terms are confirmed
+   * (pilot plan AI-02). The stub always accepts it.
+   */
+  guestData?: boolean;
+  /**
+   * The church and guardrail version this call works for (DB-08). Required for guest data:
+   * the provider gets a church-scoped cache key and the system prompt starts with it, so no
+   * cached prompt is shared across churches.
+   */
+  cacheScope?: { churchId: string; guardrailVersion: number | null };
 }
 
 export interface CompletionResult {
@@ -36,6 +48,8 @@ export interface CompletionResult {
   usage: { inputTokens: number; outputTokens: number };
   stopReason: string | null;
   latencyMs: number;
+  /** What was sent (system as sent, with its scope line), for the masked prompt log (DB-07). */
+  prompt?: { system?: string; messages: ChatMessage[] };
 }
 
 export interface ModelClient {
@@ -52,6 +66,9 @@ export interface ProviderCall {
   maxTokens: number;
   temperature?: number;
   timeoutMs: number;
+  signal?: AbortSignal;
+  /** Per-church prompt-cache key (see cache-scope.ts). */
+  cacheKey?: string;
 }
 
 export interface ProviderResult {

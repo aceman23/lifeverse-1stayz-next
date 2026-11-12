@@ -21,8 +21,10 @@ export async function callAnthropic(call: ProviderCall): Promise<ProviderResult>
       ...(call.system && { system: call.system }),
       messages: call.messages,
       ...(call.temperature !== undefined && { temperature: call.temperature }),
+      ...(call.cacheKey && { metadata: { user_id: call.cacheKey } }),
     },
     call.timeoutMs,
+    call.signal,
   );
 
   return {

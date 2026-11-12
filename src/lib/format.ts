@@ -20,8 +20,9 @@ export const formatWeekdayDate = (iso: string) => weekdayDate.format(new Date(is
 export const formatClock = (iso: string) => clock.format(new Date(iso));
 export const formatDayTime = (iso: string) => `${formatDay(iso)} · ${formatTime(iso)}`;
 
-export function formatRelative(iso: string) {
-  const diff = NOW.getTime() - new Date(iso).getTime();
+/** "5m ago". Demo data is anchored to the mock clock; real rows pass the current time. */
+export function formatRelative(iso: string, now: Date = NOW) {
+  const diff = now.getTime() - new Date(iso).getTime();
   const future = diff < 0;
   const mins = Math.round(Math.abs(diff) / 60000);
   const wrap = (s: string) => (future ? `in ${s}` : `${s} ago`);
@@ -72,3 +73,13 @@ export function fromDateInput(date: string, time: string) {
 
 /** Calendar-day key in church time, for grouping. */
 export const dayKey = (iso: string) => toDateInput(iso).date;
+
+/** A wait in minutes, readable at any length: "12 min", "3 h 5 min", "2 days 4 h". */
+export function formatWait(minutes: number) {
+  const m = Math.max(0, Math.floor(minutes));
+  if (m < 90) return `${m} min`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return m % 60 ? `${h} h ${m % 60} min` : `${h} h`;
+  const d = Math.floor(h / 24);
+  return h % 24 ? `${d} ${d === 1 ? "day" : "days"} ${h % 24} h` : `${d} ${d === 1 ? "day" : "days"}`;
+}

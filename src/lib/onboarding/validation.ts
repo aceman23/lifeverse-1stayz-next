@@ -1,4 +1,4 @@
-import type { CheckStatus, OnboardingState, ServiceRow, StaffMember } from "./types";
+import type { CheckStatus, OnboardingState, PolicyDetails, ServiceRow, StaffMember } from "./types";
 
 const filled = (value: string) => value.trim().length > 0;
 
@@ -16,6 +16,12 @@ function phoneDigits(value: string): string | null {
   const national = digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits;
   // Area codes never start with 0 or 1.
   return /^[2-9]\d{9}$/.test(national) ? national : null;
+}
+
+/** "(970) 555-0177" -> "+19705550177" (what Twilio needs), or null if it isn't a US/Canada number. */
+export function toE164(value: string): string | null {
+  const d = phoneDigits(value.trim());
+  return d ? `+1${d}` : null;
 }
 
 /** Optional field: blank is fine, anything else must be a US/Canada phone number. */
@@ -47,6 +53,60 @@ export function websiteError(value: string): string | null {
   } catch {
     return message;
   }
+}
+
+/** A public page on the church's own site: a full https:// address. Blank is "not yet". */
+export function policyUrlError(value: string): string | null {
+  const v = value.trim();
+  if (!v) return "Required";
+  const message = "Enter the full address, starting with https://";
+  if (/\s/.test(v) || !/^https:\/\//i.test(v)) return message;
+  try {
+    return HOSTNAME_RE.test(new URL(v).hostname) ? null : message;
+  } catch {
+    return message;
+  }
+}
+
+/** "redemptionhills.com/sms" -> "https://redemptionhills.com/sms"; leaves anything else as typed. */
+export function normalizePolicyUrl(value: string): string {
+  const v = value.trim();
+  return v && !/^[a-z][a-z\d+.-]*:\/\//i.test(v) ? `https://${v}` : v;
+}
+
+export function emailError(value: string): string | null {
+  const v = value.trim();
+  if (!v) return "Required";
+  return /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(v) ? null : "Enter an email like hello@yourchurch.org.";
+}
+
+/** The church details the 1Stayz-hosted documents would be written with right now. */
+export function currentPolicyDetails(s: OnboardingState): PolicyDetails {
+  return {
+    church_name: s.church.name.trim(),
+    phone: s.church.phone.trim(),
+    email: s.smsPolicy.contactEmail.trim().toLowerCase(),
+    website: s.church.website.trim(),
+    address: s.church.address.trim(),
+  };
+}
+
+export type SmsPolicyState = "none" | "incomplete" | "approval_needed" | "outdated" | "done";
+
+/** Where the SMS Terms and Privacy Policy stand. */
+export function smsPolicyState(s: OnboardingState): SmsPolicyState {
+  const p = s.smsPolicy;
+  if (p.hosting === "church_site") {
+    return !policyUrlError(p.termsUrl) && !policyUrlError(p.privacyUrl) ? "done" : "incomplete";
+  }
+  if (p.hosting === "1stayz") {
+    if (!p.approvedAt || !p.approvedSnapshot) return emailError(p.contactEmail) ? "incomplete" : "approval_needed";
+    const now = currentPolicyDetails(s);
+    const then = p.approvedSnapshot;
+    const same = (Object.keys(now) as (keyof PolicyDetails)[]).every((k) => now[k] === (then[k] ?? ""));
+    return same ? "done" : "outdated";
+  }
+  return "none";
 }
 
 function serviceIsValid(row: ServiceRow) {
@@ -108,6 +168,7 @@ export const READY_ITEMS: ReadyItem[] = [
   { key: "services", label: "Service schedule reviewed", step: 1 },
   { key: "subsplash", label: "Subsplash connected", step: 3 },
   { key: "sms", label: "Text number approved OR email-first fallback acknowledged", step: 3 },
+  { key: "smsPolicy", label: "SMS Terms and Privacy Policy public", step: 3 },
   { key: "guardrails", label: "Guardrails approved by pastor", step: 4 },
   { key: "escalation", label: "Escalation contact set", step: 5 },
   { key: "firstMessage", label: "First message approved by pastor", step: 6 },
@@ -124,6 +185,9 @@ export function computeReadyCheck(s: OnboardingState): Record<string, CheckStatu
     services: services.length === 0 ? "gray" : reviewed === services.length ? "green" : "amber",
     subsplash: int.subsplash !== "none" ? "green" : "gray",
     sms: int.smsStatus === "approved" || int.emailFallbackAcknowledged ? "green" : "amber",
+    smsPolicy: { done: "green", none: "gray", incomplete: "amber", approval_needed: "amber", outdated: "amber" }[
+      smsPolicyState(s)
+    ] as CheckStatus,
     guardrails: s.guardrailsApprovedBy ? "green" : "gray",
     escalation:
       syncEscalationOrder(s.staff, s.escalationOrder).length > 0 ? "green" : s.staff.length > 0 ? "amber" : "gray",

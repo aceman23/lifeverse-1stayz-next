@@ -1,3 +1,4 @@
+import { setTimeout as delay } from "node:timers/promises";
 import { ModelProviderError, type ProviderName } from "../types";
 
 const RETRYABLE = new Set([408, 409, 429, 500, 502, 503, 504, 529]);
@@ -15,20 +16,23 @@ export async function postJson<T>(
   headers: Record<string, string>,
   body: unknown,
   timeoutMs: number,
+  signal?: AbortSignal,
 ): Promise<T> {
   let lastError: ModelProviderError | null = null;
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    signal?.throwIfAborted();
     let res: Response;
     try {
       res = await fetch(url, {
         method: "POST",
         headers: { "content-type": "application/json", ...headers },
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(timeoutMs),
+        signal: AbortSignal.any([AbortSignal.timeout(timeoutMs), ...(signal ? [signal] : [])]),
         cache: "no-store",
       });
     } catch (err) {
+      signal?.throwIfAborted();
       const timedOut = err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError");
       lastError = new ModelProviderError(
         timedOut ? `${provider} request timed out after ${timeoutMs} ms` : `${provider} request failed: network error`,
@@ -36,7 +40,7 @@ export async function postJson<T>(
         null,
         true,
       );
-      if (attempt < MAX_ATTEMPTS) await sleep(500);
+      if (attempt < MAX_ATTEMPTS) await delay(500, undefined, { signal });
       continue;
     }
 
@@ -50,7 +54,7 @@ export async function postJson<T>(
       retryable,
     );
     if (!retryable || attempt === MAX_ATTEMPTS) break;
-    await sleep(retryAfterMs(res.headers.get("retry-after")));
+    await delay(retryAfterMs(res.headers.get("retry-after")), undefined, { signal });
   }
 
   throw lastError ?? new ModelProviderError(`${provider} request failed`, provider, null, false);
@@ -69,8 +73,4 @@ async function errorText(res: Response): Promise<string> {
 function retryAfterMs(header: string | null): number {
   const seconds = header ? Number(header) : NaN;
   return Number.isFinite(seconds) ? Math.min(seconds * 1000, MAX_WAIT_MS) : 1_000;
-}
-
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }

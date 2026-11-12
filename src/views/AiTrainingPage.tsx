@@ -108,7 +108,7 @@ export default function AiTrainingPage() {
     <div>
       <header className="animate-slide-up mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-ink">AI Training</h1>
+          <h1 className="text-2xl font-bold text-ink">Train Your AI</h1>
           <p className="mt-1 text-sm text-ink-3">
             {"Train internal chatbots with your church's proprietary content and set guardrails for safe AI behavior."}
           </p>

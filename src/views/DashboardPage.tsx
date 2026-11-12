@@ -120,14 +120,14 @@ export default function DashboardPage() {
       </div>
 
       <section
-        aria-label="Follow-Up Engine status"
+        aria-label="Sequences status"
         className="animate-slide-up flex items-stretch overflow-hidden rounded-2xl bg-[#1a2e2a] shadow-card"
         style={{ animationDelay: "180ms" }}
       >
         <div className="flex-1 px-4 py-5 md:px-6">
           <div className="mb-4 flex items-center gap-2">
             <Link href="/follow-up-engine" className="text-base font-bold text-white hover:underline">
-              Follow-Up Engine
+              Sequences
             </Link>
             <span
               className={cn(

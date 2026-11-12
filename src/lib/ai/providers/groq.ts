@@ -24,8 +24,10 @@ export async function callGroq(call: ProviderCall): Promise<ProviderResult> {
       messages,
       max_completion_tokens: call.maxTokens,
       ...(call.temperature !== undefined && { temperature: call.temperature }),
+      ...(call.cacheKey && { user: call.cacheKey }),
     },
     call.timeoutMs,
+    call.signal,
   );
 
   const choice = data.choices[0];

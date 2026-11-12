@@ -15,9 +15,17 @@ export interface RouteRequest {
   onboardingStatus: () => Promise<OnboardingStatus>;
 }
 
-/** Open to everyone, signed in or not. */
-const OPEN_PREFIXES = ["/beta", "/auth"];
-/** Sign-in pages. */
+/**
+ * Open to everyone, signed in or not. Webhooks are here: they have no session and
+ * authenticate themselves (/api/intake checks the church's intake key, /api/twilio the
+ * Twilio signature, /api/email/webhook the Resend signature, /api/cron the cron secret;
+ * /api/email/unsubscribe is the public unsubscribe link; /api/health is the uptime check). /c/<slug>/sms-terms and /privacy are a church's public SMS documents.
+ */
+const OPEN_PREFIXES = ["/auth", "/api/intake", "/api/twilio", "/api/email", "/api/cron", "/api/health", "/c"];
+/**
+ * Sign-in pages. Always open, even with a saved session, so anyone can sign in with another
+ * account; signing in replaces the saved session.
+ */
 const AUTH_PREFIXES = ["/login", "/sign-up"];
 /** Need a session but not finished onboarding (API routes do their own checks). */
 const SESSION_ONLY_PREFIXES = ["/api"];
@@ -30,28 +38,25 @@ export const isOnboardingPath = (pathname: string) => matches(pathname, ["/onboa
 /**
  * Returns the path to redirect to, or null to let the request through.
  *
+ * - Sign-in pages (/login, /sign-up) are open to everyone, signed in or not.
  * - Signed out: only sign-in pages, open pages and the demo wizard. Everything else → /login.
- * - Signed in, onboarding unfinished: only /onboarding. App pages and /login → /onboarding.
- * - Signed in, onboarding finished: /onboarding and /login → /today.
+ * - Signed in, onboarding unfinished: only /onboarding. App pages → /onboarding.
+ * - Signed in, onboarding finished: /onboarding → /today.
  * - If the status can't be read, app pages fail closed to /onboarding (it shows the load error).
  */
 export async function redirectFor(req: RouteRequest): Promise<string | null> {
   const { pathname } = req;
 
-  if (matches(pathname, OPEN_PREFIXES)) return null;
+  if (matches(pathname, OPEN_PREFIXES) || matches(pathname, AUTH_PREFIXES)) return null;
 
-  if (req.demoCookie) {
-    return pathname === "/login" ? "/today" : null;
-  }
+  if (req.demoCookie) return null;
 
   if (!req.signedIn) {
-    if (matches(pathname, AUTH_PREFIXES)) return null;
     if (isOnboardingPath(pathname) && req.demoParam) return null;
     return "/login";
   }
 
   if (matches(pathname, SESSION_ONLY_PREFIXES)) return null;
-  if (pathname === "/sign-up" || pathname.startsWith("/sign-up/")) return null;
 
   if (isOnboardingPath(pathname)) {
     if (req.demoParam) return null;

@@ -45,3 +45,17 @@ export function apiKeyFor(feature: AiFeature, role: ModelRole): string {
   }
   return value;
 }
+
+/**
+ * Whether guest data may go to the real providers (pilot plan AI-02). Off until the Groq and
+ * Anthropic data-retention terms are confirmed and recorded in the Decision Log; until then
+ * only synthetic guest data is used, through the stub.
+ */
+export function guestDataAllowed(): boolean {
+  return process.env.AI_ALLOW_GUEST_DATA === "1" || process.env.AI_ALLOW_GUEST_DATA === "true";
+}
+
+/** A guest-data call can run right now: through the stub, or to providers once allowed. */
+export function canSendGuestData(): boolean {
+  return stubForced() || guestDataAllowed();
+}

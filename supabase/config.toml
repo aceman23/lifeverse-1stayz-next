@@ -1,0 +1,15 @@
+# Supabase CLI settings for this repo. Only what differs from the CLI defaults is set here.
+project_id = "1stayz-web-app"
+
+# Called server-to-server by the admin panel with a shared secret (x-allowlist-secret),
+# not with a user's JWT, so the gateway must not require one.
+[functions.pilot-allowlist]
+verify_jwt = false
+
+# Pilot sign-up gate (migrations/20261026000000_pilot_signup_hook.sql). This only enables it for
+# the local stack; on the hosted project turn it on in Dashboard -> Authentication -> Auth Hooks.
+# Don't use `supabase config push` with this file: it's minimal, so it would reset the hosted
+# project's other Auth settings to the CLI defaults.
+[auth.hook.before_user_created]
+enabled = true
+uri = "pg-functions://postgres/public/hook_pilot_signup"

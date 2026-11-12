@@ -1,41 +1,43 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
+import { useId, useState, useTransition } from "react";
 import {
-  ArrowRight,
   CalendarClock,
   Check,
   Church,
-  ClipboardList,
   Download,
+  Lock,
+  Mail,
   MessageSquareText,
   Plug,
-  Plus,
   Radio,
-  RefreshCw,
   ShieldCheck,
+  Smartphone,
   UsersRound,
   type LucideIcon,
 } from "lucide-react";
-import { STAFF } from "@/data/staff";
-import { GUARDRAILS } from "@/data/training";
-import type { WorkspaceMode } from "@/data/types";
-import { CHURCH, FIRST_MESSAGE, INTEGRATIONS, MODE_COPY, SERVICES } from "@/data/workspace";
-import type { BetaSignup } from "@/lib/beta";
+import { MODE_COPY } from "@/data/workspace";
+import { saveChurchProfile } from "@/lib/church/actions";
+import { kidsMinistryName } from "@/lib/church/first-message";
+import type { ChurchMode, ChurchProfileValues, ChurchSettings } from "@/lib/church/types";
+import { parseProfile, TIMEZONE_OPTIONS, type ProfileErrors } from "@/lib/church/validation";
 import { cn } from "@/lib/cn";
-import { downloadCsv } from "@/lib/csv";
-import { formatShortDate } from "@/lib/format";
+import { EMAIL_OPTIONS, SUBSPLASH_OPTIONS } from "@/lib/onboarding/constants";
 import { useWorkspace } from "@/lib/workspace-context";
-import Avatar from "@/components/ui/Avatar";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import EmptyState from "@/components/ui/EmptyState";
-import StatusBadge, { SEVERITY_BADGE, STANCE_LABEL } from "@/components/ui/StatusBadge";
+import DataExportCard from "@/components/settings/DataExportCard";
+import FirstMessagesEditor from "@/components/settings/FirstMessagesEditor";
+import GuardrailHistory from "@/components/settings/GuardrailHistory";
+import GuardrailsEditor from "@/components/settings/GuardrailsEditor";
+import IntakeKeysCard from "@/components/settings/IntakeKeysCard";
+import ScheduleEditor from "@/components/settings/ScheduleEditor";
+import TeamEditor from "@/components/settings/TeamEditor";
+import StatusBadge, { type Tone } from "@/components/ui/StatusBadge";
 import { useToast } from "@/components/ui/Toast";
 
-type SetupSection = "profile" | "schedule" | "guardrails" | "team" | "message" | "integrations" | "mode";
-type Section = SetupSection | "signups";
+type SetupSection = "profile" | "schedule" | "guardrails" | "team" | "message" | "integrations" | "mode" | "data";
 
 const SECTIONS: { id: SetupSection; label: string; icon: LucideIcon }[] = [
   { id: "profile", label: "Church Profile", icon: Church },
@@ -45,38 +47,46 @@ const SECTIONS: { id: SetupSection; label: string; icon: LucideIcon }[] = [
   { id: "message", label: "First Message", icon: MessageSquareText },
   { id: "integrations", label: "Integrations", icon: Plug },
   { id: "mode", label: "Mode", icon: Radio },
+  { id: "data", label: "Your Data", icon: Download },
 ];
 
-// Admin tools; not part of the setup checklist.
-const ADMIN_SECTIONS: { id: Section; label: string; icon: LucideIcon }[] = [{ id: "signups", label: "Pilot signups", icon: ClipboardList }];
+const inputClass =
+  "mt-1.5 h-10 w-full rounded-lg border border-line bg-surface px-3 text-sm text-ink outline-none focus:border-teal aria-[invalid=true]:border-danger";
 
-const inputClass = "mt-1.5 h-10 w-full rounded-lg border border-line bg-surface px-3 text-sm text-ink outline-none focus:border-teal";
+const NOT_EDITABLE_HERE = "Changing this from Settings is coming soon. Email support to make a change for now.";
 
-export default function SettingsPage() {
-  const toast = useToast();
+export default function SettingsPage({ settings, initialSection }: { settings: ChurchSettings; initialSection?: string }) {
   const { mode } = useWorkspace();
-  const [section, setSection] = useState<Section>("profile");
-  const [church, setChurch] = useState(CHURCH);
-  const [message, setMessage] = useState(FIRST_MESSAGE);
-  const [integrations, setIntegrations] = useState(INTEGRATIONS);
+  const [section, setSection] = useState<SetupSection>(
+    SECTIONS.find((x) => x.id === initialSection)?.id ?? "profile",
+  );
+  // Saved values, so the checklist and preview update after a save without a reload.
+  const [profile, setProfile] = useState(settings.profile);
+  const [firstMessage, setFirstMessage] = useState(settings.firstMessage);
 
+  const { integrations, guardrails, staff } = settings;
   const done: Record<SetupSection, boolean> = {
-    profile: Boolean(church.name && church.phone && church.address && church.website),
-    schedule: SERVICES.length > 0,
-    guardrails: GUARDRAILS.length > 0,
-    team: STAFF.every((s) => s.escalationTopics.length > 0),
-    message: message.trim().length > 0,
-    integrations: integrations.some((i) => i.connected),
-    mode: mode !== "setup",
+    profile: Boolean(profile.name && profile.phone && profile.address && profile.website),
+    schedule: settings.services.length > 0,
+    guardrails: guardrails.approvedAt !== null,
+    team: staff.some((s) => s.receivesEscalations),
+    message: firstMessage?.status === "approved",
+    integrations: Boolean(
+      integrations && integrations.subsplash !== "none" && (integrations.smsStatus === "approved" || integrations.emailFallbackAcknowledged),
+    ),
+    mode: true,
+    data: false,
   };
-  const completed = Object.values(done).filter(Boolean).length;
+  // The checklist counts setup steps; "Your Data" isn't one.
+  const steps = SECTIONS.filter((x) => x.id !== "data");
+  const completed = steps.filter((x) => done[x.id]).length;
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[220px_minmax(0,1fr)_260px]">
       {/* Sub-nav: a scrolling chip row on mobile, a list from lg up */}
       <nav aria-label="Settings sections" className="animate-fade-in min-w-0">
         <ul className="-mx-4 flex gap-1 overflow-x-auto px-4 pb-1 lg:mx-0 lg:flex-col lg:px-0">
-          {[...SECTIONS, ...ADMIN_SECTIONS].map(({ id, label, icon: Icon }) => {
+          {SECTIONS.map(({ id, label, icon: Icon }) => {
             const active = section === id;
             return (
               <li key={id} className="shrink-0">
@@ -91,7 +101,7 @@ export default function SettingsPage() {
                 >
                   <Icon className={cn("h-4 w-4 shrink-0", active ? "text-teal" : "text-ink-3")} aria-hidden="true" />
                   <span className="flex-1">{label}</span>
-                  {id !== "signups" && done[id] && <Check className="hidden h-3.5 w-3.5 text-success lg:block" aria-label="Complete" />}
+                  {done[id] && <Check className="hidden h-3.5 w-3.5 text-success lg:block" aria-label="Complete" />}
                 </button>
               </li>
             );
@@ -100,217 +110,38 @@ export default function SettingsPage() {
       </nav>
 
       <div key={section} className="min-w-0">
-        {section === "profile" && (
-          <Card title="Church Profile" description="Used in every message and on the assistant's web chat">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {(
-                [
-                  ["name", "Church name"],
-                  ["phone", "Church phone"],
-                  ["website", "Website"],
-                  ["denomination", "Denomination"],
-                ] as const
-              ).map(([key, label]) => (
-                <label key={key} className="block">
-                  <span className="text-xs font-medium text-ink-2">{label}</span>
-                  <input value={church[key]} onChange={(e) => setChurch({ ...church, [key]: e.target.value })} className={inputClass} />
-                </label>
-              ))}
-              <label className="block sm:col-span-2">
-                <span className="text-xs font-medium text-ink-2">Address</span>
-                <input value={church.address} onChange={(e) => setChurch({ ...church, address: e.target.value })} className={inputClass} />
-              </label>
-              <label className="block">
-                <span className="text-xs font-medium text-ink-2">Time zone</span>
-                <select value={church.timezone} onChange={(e) => setChurch({ ...church, timezone: e.target.value })} className={inputClass}>
-                  <option value="America/New_York">Eastern</option>
-                  <option value="America/Chicago">Central</option>
-                  <option value="America/Denver">Mountain</option>
-                  <option value="America/Los_Angeles">Pacific</option>
-                </select>
-              </label>
-              <label className="block">
-                <span className="text-xs font-medium text-ink-2">Average weekend attendance</span>
-                <input
-                  type="number"
-                  value={church.averageAttendance}
-                  onChange={(e) => setChurch({ ...church, averageAttendance: Number(e.target.value) })}
-                  className={inputClass}
-                />
-              </label>
-            </div>
-            <div className="mt-5 flex justify-end">
-              <Button variant="primary" onClick={() => toast("Church profile saved.")}>
-                Save changes
-              </Button>
-            </div>
-          </Card>
-        )}
-
-        {section === "schedule" && (
-          <Card title="Service Schedule" description="The assistant invites guests to these times" flush>
-            <ul className="divide-y divide-line border-t border-line">
-              {SERVICES.map((s) => (
-                <li key={s.id} className="flex flex-wrap items-center gap-3 px-5 py-3.5">
-                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-[#E8F4F2] text-teal">
-                    <CalendarClock className="h-4 w-4" aria-hidden="true" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-ink">
-                      {s.day} · {s.time}
-                    </p>
-                    <p className="text-xs text-ink-2">{s.name}</p>
-                  </div>
-                  {s.kids && <StatusBadge tone="teal">Kids program</StatusBadge>}
-                </li>
-              ))}
-            </ul>
-            <div className="border-t border-line px-5 py-3">
-              <Button variant="ghost" size="sm" onClick={() => toast("Adding services is coming soon. Email support to add one for now.", { tone: "info" })}>
-                <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-                Add service
-              </Button>
-            </div>
-          </Card>
-        )}
-
+        {section === "profile" && <ProfileSection initial={profile} demo={settings.demo} onSaved={setProfile} />}
+        {section === "schedule" && <ScheduleSection settings={settings} />}
         {section === "guardrails" && (
-          <Card
-            title="Guardrails"
-            description="Sensitive topics and how the assistant handles them"
-            action={
-              <Link href="/ai-training" className="inline-flex items-center gap-1 text-xs font-medium text-teal-text hover:underline">
-                Edit in AI Training <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
-              </Link>
-            }
-            flush
-          >
-            <ul className="divide-y divide-line border-t border-line">
-              {GUARDRAILS.map((g) => (
-                <li key={g.id} className="flex flex-wrap items-center gap-2 px-5 py-3">
-                  <span className="min-w-0 flex-1 text-sm text-ink">{g.topic}</span>
-                  <StatusBadge tone={SEVERITY_BADGE[g.severity].tone}>{SEVERITY_BADGE[g.severity].label}</StatusBadge>
-                  <span className="w-28 text-right text-xs text-ink-2">{STANCE_LABEL[g.stance]}</span>
-                </li>
-              ))}
-            </ul>
-          </Card>
-        )}
-
-        {section === "team" && (
-          <Card title="Team & Escalations" description="Who gets notified when the assistant hands a conversation to a person" flush>
-            <ul className="divide-y divide-line border-t border-line">
-              {STAFF.map((s) => (
-                <li key={s.id} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center">
-                  <div className="flex min-w-0 flex-1 items-center gap-3">
-                    <Avatar name={s.name} />
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-ink">{s.name}</p>
-                      <p className="truncate text-xs text-ink-2">
-                        {s.role} · {s.phone}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5 sm:justify-end">
-                    {s.escalationTopics.map((t) => (
-                      <span key={t} className="rounded-full bg-bg px-2.5 py-1 text-xs text-ink-2">
-                        {t}
-                      </span>
-                    ))}
-                  </div>
-                </li>
-              ))}
-            </ul>
-            <div className="border-t border-line px-5 py-3">
-              <Button variant="ghost" size="sm" onClick={() => toast("Team invites are coming soon. Email support to add a teammate.", { tone: "info" })}>
-                <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-                Invite teammate
-              </Button>
-            </div>
-          </Card>
-        )}
-
-        {section === "message" && (
-          <Card title="First Message" description="The Day 0 thank-you every first-time guest receives">
-            <label className="block">
-              <span className="sr-only">First message</span>
-              <textarea
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                rows={5}
-                className="w-full resize-y rounded-lg border border-line bg-surface p-3 text-sm leading-relaxed text-ink outline-none focus:border-teal"
-              />
-            </label>
-            <p className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-ink-2">
-              Variables:
-              {["{first_name}", "{service_day}", "{church_name}"].map((v) => (
-                <button
-                  key={v}
-                  type="button"
-                  onClick={() => setMessage((m) => `${m}${m.endsWith(" ") ? "" : " "}${v}`)}
-                  className="rounded bg-bg px-1.5 py-0.5 font-mono text-[11px] text-ink transition-colors hover:bg-line/60"
-                >
-                  {v}
-                </button>
-              ))}
-            </p>
-            <div className="mt-5 rounded-xl bg-bg p-4">
-              <p className="mb-2 text-[11px] font-medium tracking-wide text-ink-3 uppercase">Preview</p>
-              <div className="max-w-sm rounded-2xl rounded-bl-md bg-surface px-3.5 py-2.5 text-sm leading-relaxed text-ink shadow-card">
-                {message.replaceAll("{first_name}", "Marcus").replaceAll("{service_day}", "this morning").replaceAll("{church_name}", church.name)}
-              </div>
-              <p className="mt-2 text-[11px] text-ink-3">{message.length} characters · {Math.max(1, Math.ceil(message.length / 160))} SMS segment(s)</p>
-            </div>
-          </Card>
-        )}
-
-        {section === "integrations" && (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {integrations.map((i, idx) => (
-              <article
-                key={i.id}
-                className="animate-slide-up flex flex-col rounded-xl border border-line bg-surface p-5 shadow-card"
-                style={{ animationDelay: `${idx * 50}ms` }}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-bg text-sm font-semibold text-ink">
-                    {i.name[0]}
-                  </span>
-                  <StatusBadge tone={i.connected ? "success" : "neutral"}>{i.connected ? "Connected" : "Not connected"}</StatusBadge>
-                </div>
-                <p className="mt-3 text-sm font-medium text-ink">{i.name}</p>
-                <p className="mt-0.5 flex-1 text-xs leading-relaxed text-ink-2">{i.description}</p>
-                <div className="mt-4 flex items-center justify-between gap-2">
-                  <span className="text-[11px] text-ink-3">{i.lastSync && `Synced ${i.lastSync}`}</span>
-                  <Button
-                    size="sm"
-                    variant={i.connected ? "ghost" : "secondary"}
-                    onClick={() =>
-                      setIntegrations((list) =>
-                        list.map((x) => (x.id === i.id ? { ...x, connected: !x.connected, lastSync: x.connected ? null : "just now" } : x)),
-                      )
-                    }
-                  >
-                    {i.connected ? "Disconnect" : "Connect"}
-                  </Button>
-                </div>
-              </article>
-            ))}
+          <div className="space-y-4">
+            <GuardrailsEditor initial={settings.guardrails} canEdit={settings.isOwner && !settings.demo} demo={settings.demo} />
+            <GuardrailHistory history={settings.guardrailHistory} />
           </div>
         )}
-
+        {section === "team" && <TeamEditor settings={settings} canEdit={settings.isOwner && !settings.demo} />}
+        {section === "message" && (
+          <FirstMessagesEditor
+            welcome={firstMessage}
+            families={settings.firstMessageFamilies}
+            ctx={{ churchName: profile.name, kidsMinistry: kidsMinistryName(settings.ministries) }}
+            demo={settings.demo}
+            live={mode === "live"}
+            canEdit={settings.isOwner && !settings.demo}
+            onWelcomeSaved={setFirstMessage}
+          />
+        )}
+        {section === "integrations" && <IntegrationsSection settings={settings} />}
         {section === "mode" && <ModeSettings />}
-
-        {section === "signups" && <PilotSignups />}
+        {section === "data" && <DataExportCard isOwner={settings.isOwner} demo={settings.demo} consent={settings.learningConsent} />}
       </div>
 
       <aside className="min-w-0 lg:col-start-2 xl:col-start-auto">
-        <Card title="Setup checklist" description={`${completed} of ${SECTIONS.length} complete`} delay={80}>
+        <Card title="Setup checklist" description={`${completed} of ${steps.length} complete`} delay={80}>
           <div className="mb-4 h-1.5 overflow-hidden rounded-full bg-bg">
-            <div className="h-full rounded-full bg-teal transition-[width] duration-500" style={{ width: `${(completed / SECTIONS.length) * 100}%` }} />
+            <div className="h-full rounded-full bg-teal transition-[width] duration-500" style={{ width: `${(completed / steps.length) * 100}%` }} />
           </div>
           <ul className="space-y-1">
-            {SECTIONS.map(({ id, label }) => (
+            {steps.map(({ id, label }) => (
               <li key={id}>
                 <button
                   type="button"
@@ -337,39 +168,305 @@ export default function SettingsPage() {
   );
 }
 
-const MODE_ACCENT: Record<WorkspaceMode, string> = {
-  setup: "bg-ink-3",
+// ---------------------------------------------------------------------------
+// Church Profile
+// ---------------------------------------------------------------------------
+
+function Field({
+  label,
+  error,
+  className,
+  children,
+}: {
+  label: string;
+  error?: string;
+  className?: string;
+  children: (props: { id: string; "aria-invalid": boolean; "aria-describedby"?: string }) => React.ReactNode;
+}) {
+  const id = useId();
+  return (
+    <div className={className}>
+      <label htmlFor={id} className="text-xs font-medium text-ink-2">
+        {label}
+      </label>
+      {children({ id, "aria-invalid": Boolean(error), "aria-describedby": error ? `${id}-error` : undefined })}
+      {error && (
+        <p id={`${id}-error`} className="mt-1.5 text-xs text-danger">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function ProfileSection({
+  initial,
+  demo,
+  onSaved,
+}: {
+  initial: ChurchProfileValues;
+  demo: boolean;
+  onSaved: (profile: ChurchProfileValues) => void;
+}) {
+  const toast = useToast();
+  const [values, setValues] = useState(initial);
+  const [errors, setErrors] = useState<ProfileErrors>({});
+  const [pending, startTransition] = useTransition();
+  const dirty = (Object.keys(values) as (keyof ChurchProfileValues)[]).some((k) => values[k] !== initial[k]);
+
+  // Keep a zone saved before the list changed selectable instead of silently switching it.
+  const zones = TIMEZONE_OPTIONS.some((o) => o.zone === values.timezone)
+    ? TIMEZONE_OPTIONS
+    : [{ zone: values.timezone, label: values.timezone }, ...TIMEZONE_OPTIONS];
+
+  const set = (key: keyof ChurchProfileValues) => (value: string) => {
+    setValues((v) => ({ ...v, [key]: value }));
+    if (errors[key]) setErrors((e) => ({ ...e, [key]: undefined }));
+  };
+
+  function save(e: React.FormEvent) {
+    e.preventDefault();
+    const parsed = parseProfile(values);
+    if ("errors" in parsed) {
+      setErrors(parsed.errors);
+      return;
+    }
+    if (demo) {
+      toast("This is the demo workspace, so changes aren't saved.", { tone: "info" });
+      return;
+    }
+    startTransition(async () => {
+      const result = await saveChurchProfile(values).catch(() => ({
+        ok: false as const,
+        error: "Couldn't save. Check your connection and try again.",
+        fieldErrors: undefined,
+      }));
+      if (!result.ok) {
+        if (result.fieldErrors) setErrors(result.fieldErrors);
+        toast(result.error, { tone: "danger" });
+        return;
+      }
+      const saved = { ...values, phone: result.data.phone };
+      setValues(saved);
+      onSaved(saved);
+      toast("Church profile saved.");
+    });
+  }
+
+  const text = (key: keyof ChurchProfileValues, label: string, opts: { type?: string; className?: string; placeholder?: string } = {}) => (
+    <Field label={label} error={errors[key]} className={opts.className}>
+      {(a11y) => (
+        <input
+          {...a11y}
+          type={opts.type ?? "text"}
+          value={values[key]}
+          placeholder={opts.placeholder}
+          onChange={(e) => set(key)(e.target.value)}
+          className={inputClass}
+        />
+      )}
+    </Field>
+  );
+
+  return (
+    <Card title="Church Profile" description="Used in every message and on the assistant's web chat">
+      <form onSubmit={save} noValidate>
+        <fieldset disabled={pending} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {text("name", "Church name")}
+          {text("phone", "Church phone", { type: "tel", placeholder: "(555) 123-4567" })}
+          {text("website", "Website", { placeholder: "yourchurch.org" })}
+          {text("denomination", "Denomination", { placeholder: "e.g. Non-denominational" })}
+          {text("address", "Address", { className: "sm:col-span-2" })}
+          <Field label="Time zone" error={errors.timezone}>
+            {(a11y) => (
+              <select {...a11y} value={values.timezone} onChange={(e) => set("timezone")(e.target.value)} className={inputClass}>
+                {zones.map((o) => (
+                  <option key={o.zone} value={o.zone}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            )}
+          </Field>
+          <Field label="Average weekend attendance" error={errors.averageAttendance}>
+            {(a11y) => (
+              <input
+                {...a11y}
+                inputMode="numeric"
+                value={values.averageAttendance}
+                placeholder="e.g. 420"
+                onChange={(e) => set("averageAttendance")(e.target.value)}
+                className={inputClass}
+              />
+            )}
+          </Field>
+        </fieldset>
+        <div className="mt-5 flex items-center justify-end gap-3">
+          {dirty && !pending && (
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setValues(initial);
+                setErrors({});
+              }}
+            >
+              Discard
+            </Button>
+          )}
+          <Button type="submit" variant="primary" disabled={!dirty || pending}>
+            {pending ? "Saving…" : "Save changes"}
+          </Button>
+        </div>
+      </form>
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Service Schedule
+// ---------------------------------------------------------------------------
+
+function ScheduleSection({ settings }: { settings: ChurchSettings }) {
+  const zone = TIMEZONE_OPTIONS.find((o) => o.zone === settings.profile.timezone)?.label ?? settings.profile.timezone;
+  return <ScheduleEditor initial={settings.services} timezoneLabel={zone} demo={settings.demo} />;
+}
+
+// ---------------------------------------------------------------------------
+// First Message
+// ---------------------------------------------------------------------------
+
+function IntegrationsSection({ settings }: { settings: ChurchSettings }) {
+  const i = settings.integrations;
+  if (!i) {
+    return (
+      <div className="space-y-4">
+        <Card title="Integrations" description="How guests reach you and how 1Stayz contacts them">
+          <EmptyState icon={Plug} title="Nothing connected yet" body="Connect Subsplash and email in the Connect Systems step of setup." />
+        </Card>
+        <IntakeKeysCard keys={settings.intakeKeys} isOwner={settings.isOwner} demo={settings.demo} />
+      </div>
+    );
+  }
+
+  const subsplash = SUBSPLASH_OPTIONS.find((o) => o.value === i.subsplash);
+  const email = EMAIL_OPTIONS.find((o) => o.value === i.emailProvider);
+  const cards: { id: string; name: string; icon: LucideIcon; detail: string; badge: { label: string; tone: Tone } }[] = [
+    {
+      id: "subsplash",
+      name: "Subsplash",
+      icon: Plug,
+      detail: subsplash ? `New guests arrive through: ${subsplash.label}` : "Guest sign-ups aren't connected yet.",
+      badge: subsplash ? { label: "Connected", tone: "success" } : { label: "Not connected", tone: "neutral" },
+    },
+    {
+      id: "sms",
+      name: "Text messaging",
+      icon: Smartphone,
+      detail:
+        i.smsStatus === "approved"
+          ? "Your text number is approved by the carriers."
+          : i.emailFallbackAcknowledged
+            ? "Number registration is in review. Guests get email first until it's approved."
+            : "Number registration is in review.",
+      badge: i.smsStatus === "approved" ? { label: "Approved", tone: "success" } : { label: "In review", tone: "warning" },
+    },
+    {
+      id: "email",
+      name: "Email",
+      icon: Mail,
+      detail: email ? `Sent with ${email.label}` : "No email account connected.",
+      badge: email ? { label: "Connected", tone: "success" } : { label: "Not connected", tone: "neutral" },
+    },
+    {
+      id: "consent",
+      name: "Consent wording",
+      icon: ShieldCheck,
+      detail: i.consentWordingLive
+        ? "Your connection card shows the text-message consent wording."
+        : "Add the consent wording to your connection card before texting guests.",
+      badge: i.consentWordingLive ? { label: "Live", tone: "success" } : { label: "Not live", tone: "warning" },
+    },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {cards.map((c, idx) => (
+          <article
+            key={c.id}
+            className="animate-slide-up flex flex-col rounded-xl border border-line bg-surface p-5 shadow-card"
+            style={{ animationDelay: `${idx * 50}ms` }}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-bg text-ink-2">
+                <c.icon className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <StatusBadge tone={c.badge.tone}>{c.badge.label}</StatusBadge>
+            </div>
+            <p className="mt-3 text-sm font-medium text-ink">{c.name}</p>
+            <p className="mt-0.5 flex-1 text-xs leading-relaxed text-ink-2">{c.detail}</p>
+          </article>
+        ))}
+      </div>
+      <p className="text-xs text-ink-3">{NOT_EDITABLE_HERE}</p>
+      <IntakeKeysCard keys={settings.intakeKeys} isOwner={settings.isOwner} demo={settings.demo} />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Mode
+// ---------------------------------------------------------------------------
+
+const MODE_ACCENT: Record<ChurchMode, string> = {
   shadow: "bg-warning",
   live: "bg-success",
 };
 
 function ModeSettings() {
-  const { mode, setMode } = useWorkspace();
+  const toast = useToast();
+  const { mode, setMode, liveBlockedReason } = useWorkspace();
+  const [pending, startTransition] = useTransition();
+
+  function choose(next: ChurchMode) {
+    if (next === mode) return;
+    startTransition(async () => {
+      const error = await setMode(next);
+      if (error) toast(error, { tone: "danger" });
+      else toast(`Switched to ${MODE_COPY[next].label} mode.`);
+    });
+  }
+
   return (
     <Card title="Mode" description="Controls whether the assistant can send messages on its own">
-      <div role="radiogroup" aria-label="Workspace mode" className="grid grid-cols-1 gap-3 md:grid-cols-3">
-        {(Object.keys(MODE_COPY) as WorkspaceMode[]).map((m) => {
+      <div role="radiogroup" aria-label="Workspace mode" aria-busy={pending} className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        {(["shadow", "live"] as const).map((m) => {
           const on = mode === m;
+          const locked = m === "live" && !on && liveBlockedReason !== null;
           return (
             <button
               key={m}
               type="button"
               role="radio"
               aria-checked={on}
-              onClick={() => setMode(m)}
+              aria-disabled={locked || pending}
+              onClick={() => !locked && !pending && choose(m)}
               className={cn(
                 "flex flex-col rounded-xl border p-4 text-left transition-all",
-                on ? "border-teal bg-[#E8F4F2]/50 ring-1 ring-teal" : "border-line hover:border-ink-3",
+                on ? "border-teal bg-[#E8F4F2]/50 ring-1 ring-teal" : "border-line",
+                locked ? "cursor-not-allowed bg-bg/60" : !on && "hover:border-ink-3",
               )}
             >
               <span className="flex items-center justify-between">
-                <span className="flex items-center gap-2 text-sm font-semibold text-ink">
-                  <span className={cn("h-2 w-2 rounded-full", MODE_ACCENT[m])} aria-hidden="true" />
+                <span className={cn("flex items-center gap-2 text-sm font-semibold", locked ? "text-ink-3" : "text-ink")}>
+                  <span className={cn("h-2 w-2 rounded-full", MODE_ACCENT[m], locked && "opacity-40")} aria-hidden="true" />
                   {MODE_COPY[m].label}
                 </span>
                 {on && <Check className="h-4 w-4 text-teal" aria-hidden="true" />}
+                {locked && <Lock className="h-3.5 w-3.5 text-ink-3" aria-hidden="true" />}
               </span>
               <span className="mt-2 text-xs leading-relaxed text-ink-2">{MODE_COPY[m].description}</span>
+              {locked && <span className="mt-2 text-xs leading-relaxed font-medium text-ink-2">{liveBlockedReason}</span>}
             </button>
           );
         })}
@@ -379,155 +476,6 @@ function ModeSettings() {
           Live mode sends routine messages without review. Guardrail topics marked &ldquo;Route to pastor&rdquo; still wait for a person.
         </p>
       )}
-    </Card>
-  );
-}
-
-type SignupsState = { status: "loading" } | { status: "error"; message: string } | { status: "ready"; signups: BetaSignup[] };
-
-async function fetchSignups(): Promise<SignupsState> {
-  try {
-    const res = await fetch("/api/beta-signups", { cache: "no-store" });
-    // Signed-out requests get redirected to the login page by the proxy, which isn't JSON.
-    const body = res.headers.get("content-type")?.includes("application/json") ? await res.json() : null;
-    if (!res.ok || !body) return { status: "error", message: body?.error ?? "Sign in with a staff account to see pilot signups." };
-    return { status: "ready", signups: body.signups };
-  } catch {
-    return { status: "error", message: "Couldn't reach the server. Check your connection and try again." };
-  }
-}
-
-function PilotSignups() {
-  const toast = useToast();
-  const [state, setState] = useState<SignupsState>({ status: "loading" });
-
-  const load = useCallback(async (announce = false) => {
-    setState({ status: "loading" });
-    const next = await fetchSignups();
-    setState(next);
-    if (announce) {
-      if (next.status === "ready") toast(`Loaded ${next.signups.length} pilot ${next.signups.length === 1 ? "signup" : "signups"}.`);
-      else toast("Couldn't load pilot signups.", { tone: "danger" });
-    }
-  }, [toast]);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchSignups().then((next) => {
-      if (!cancelled) setState(next);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const signups = state.status === "ready" ? state.signups : [];
-
-  function exportCsv() {
-    downloadCsv("1stayz-pilot-signups.csv", [
-      ["Signed up", "Name", "Email", "Church", "Role", "Phone", "Church size", "Notes"],
-      ...signups.map((s) => [s.created_at ?? "", s.name, s.email, s.church, s.role, s.phone, s.church_size, s.notes]),
-    ]);
-    toast(`Exported ${signups.length} ${signups.length === 1 ? "signup" : "signups"} as CSV.`);
-  }
-
-  return (
-    <Card
-      title="Pilot signups"
-      description="Churches that asked to join from the /beta form"
-      flush
-      action={
-        <div className="flex gap-1.5">
-          <Button size="sm" variant="ghost" onClick={() => load(true)} disabled={state.status === "loading"} aria-label="Refresh">
-            <RefreshCw className={cn("h-3.5 w-3.5", state.status === "loading" && "animate-spin")} aria-hidden="true" />
-          </Button>
-          <Button size="sm" variant="secondary" onClick={exportCsv} disabled={signups.length === 0}>
-            <Download className="h-3.5 w-3.5" aria-hidden="true" />
-            Export CSV
-          </Button>
-        </div>
-      }
-    >
-      <div className="border-t border-line">
-        {state.status === "loading" && (
-          <ul aria-busy="true" aria-label="Loading pilot signups" className="divide-y divide-line">
-            {[0, 1, 2].map((i) => (
-              <li key={i} className="flex animate-pulse items-center gap-3 px-5 py-4">
-                <span className="h-8 w-8 rounded-full bg-bg" />
-                <span className="h-3 w-1/3 rounded bg-bg" />
-                <span className="ml-auto h-3 w-1/4 rounded bg-bg" />
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {state.status === "error" && (
-          <div className="flex flex-col items-center px-6 py-10 text-center">
-            <p className="text-sm font-medium text-ink">Couldn&rsquo;t load pilot signups</p>
-            <p className="mt-1 max-w-sm text-xs leading-relaxed text-ink-2">{state.message}</p>
-            <Button size="sm" variant="secondary" className="mt-4" onClick={() => load(true)}>
-              Try again
-            </Button>
-          </div>
-        )}
-
-        {state.status === "ready" && signups.length === 0 && (
-          <EmptyState icon={ClipboardList} title="No signups yet" body="Share the /beta link or the beta QR code to start collecting interest." />
-        )}
-
-        {state.status === "ready" && signups.length > 0 && (
-          <>
-            <div className="hidden overflow-x-auto md:block">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="text-[11px] tracking-wide text-ink-3 uppercase">
-                    <th className="px-5 py-3 font-medium">Name</th>
-                    <th className="px-3 py-3 font-medium">Church</th>
-                    <th className="px-3 py-3 font-medium">Size</th>
-                    <th className="px-3 py-3 font-medium">Phone</th>
-                    <th className="px-5 py-3 font-medium">Signed up</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-line border-t border-line">
-                  {signups.map((s, i) => (
-                    <tr key={s.id ?? `${s.email}-${i}`} className="align-top">
-                      <td className="px-5 py-3">
-                        <p className="font-medium text-ink">{s.name}</p>
-                        <a href={`mailto:${s.email}`} className="text-xs text-teal-text hover:underline">
-                          {s.email}
-                        </a>
-                        {s.notes && <p className="mt-1 line-clamp-2 max-w-xs text-xs text-ink-3">{s.notes}</p>}
-                      </td>
-                      <td className="px-3 py-3 text-ink-2">
-                        {s.church ?? "—"}
-                        {s.role && <span className="block text-xs text-ink-3">{s.role}</span>}
-                      </td>
-                      <td className="px-3 py-3 whitespace-nowrap text-ink-2">{s.church_size ?? "—"}</td>
-                      <td className="px-3 py-3 whitespace-nowrap text-ink-2">{s.phone ?? "—"}</td>
-                      <td className="px-5 py-3 whitespace-nowrap text-ink-2">{s.created_at ? formatShortDate(s.created_at) : "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <ul className="divide-y divide-line md:hidden">
-              {signups.map((s, i) => (
-                <li key={s.id ?? `${s.email}-${i}`} className="px-5 py-3.5">
-                  <p className="flex items-baseline justify-between gap-2">
-                    <span className="truncate text-sm font-medium text-ink">{s.name}</span>
-                    {s.created_at && <span className="shrink-0 text-xs text-ink-3">{formatShortDate(s.created_at)}</span>}
-                  </p>
-                  <a href={`mailto:${s.email}`} className="block truncate text-xs text-teal-text">
-                    {s.email}
-                  </a>
-                  <p className="mt-1 text-xs text-ink-2">{[s.church, s.role, s.church_size, s.phone].filter(Boolean).join(" · ") || "No details"}</p>
-                  {s.notes && <p className="mt-1 text-xs text-ink-3">{s.notes}</p>}
-                </li>
-              ))}
-            </ul>
-          </>
-        )}
-      </div>
     </Card>
   );
 }

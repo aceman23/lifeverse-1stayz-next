@@ -1,24 +1,22 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Mail, Phone, Search, SlidersHorizontal } from "lucide-react";
-import { PEOPLE, fullName } from "@/data/people";
-import type { Person, PipelineStage } from "@/data/types";
+import { usePathname, useRouter } from "next/navigation";
+import { ChevronLeft, ChevronRight, Mail, Phone, Search, ShieldQuestion, SlidersHorizontal, UsersRound } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { formatLongDay } from "@/lib/format";
+import {
+  PEOPLE_FILTERS,
+  PEOPLE_PAGE_SIZE,
+  fullName,
+  type GuestListItem,
+  type PeopleList,
+  type PeopleQuery,
+  type PipelineStage,
+} from "@/lib/people/types";
 import GuestAvatar from "@/components/ui/GuestAvatar";
 import { STAGE_BADGE } from "@/components/ui/StatusBadge";
-
-type Filter = "all" | "new" | "engaged" | "attention" | "scheduled";
-
-const FILTERS: { id: Filter; label: string; match: (p: Person) => boolean }[] = [
-  { id: "all", label: "All", match: () => true },
-  { id: "new", label: "New", match: (p) => p.stage === "new" || p.stage === "thanked" },
-  { id: "engaged", label: "Engaged", match: (p) => p.stage === "engaged" || p.stage === "contacted" },
-  { id: "attention", label: "Needs Attention", match: (p) => p.needsAttention },
-  { id: "scheduled", label: "Scheduled", match: (p) => p.stage === "scheduled" },
-];
 
 const STAGE_COLOR: Record<PipelineStage, string> = {
   new: "bg-stone-100 text-stone-600",
@@ -31,106 +29,113 @@ const STAGE_COLOR: Record<PipelineStage, string> = {
   integrated: "bg-emerald-100 text-emerald-800",
 };
 
-function lastVisit(p: Person) {
-  const visits = p.timeline.filter((e) => e.kind === "visit").map((e) => e.at);
-  return visits.length ? visits.reduce((a, b) => (a > b ? a : b)) : p.firstVisitAt;
+/** "/people?q=ann&filter=new&page=2", leaving out defaults. */
+function href(pathname: string, query: PeopleQuery) {
+  const params = new URLSearchParams();
+  if (query.q.trim()) params.set("q", query.q.trim());
+  if (query.filter !== "all") params.set("filter", query.filter);
+  if (query.page > 1) params.set("page", String(query.page));
+  const qs = params.toString();
+  return qs ? `${pathname}?${qs}` : pathname;
 }
 
-const PAGE_SIZE = 10;
+export default function PeoplePage({ list, query }: { list: PeopleList; query: PeopleQuery }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const [pending, startTransition] = useTransition();
+  const [search, setSearch] = useState(query.q);
+  const debounce = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-export default function PeoplePage() {
-  const [filter, setFilter] = useState<Filter>("all");
-  const [query, setQuery] = useState("");
-  const [page, setPage] = useState(1);
+  const go = (next: PeopleQuery) => startTransition(() => router.replace(href(pathname, next), { scroll: false }));
 
-  const visible = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const match = FILTERS.find((f) => f.id === filter)!.match;
-    return PEOPLE.filter(match)
-      .filter((p) => {
-        if (!q) return true;
-        const haystack = [fullName(p), p.email, p.phone, p.city, ...p.household.map((h) => h.name)].join(" ").toLowerCase();
-        return haystack.includes(q);
-      })
-      .sort((a, b) => b.lastContactAt.localeCompare(a.lastContactAt));
-  }, [filter, query]);
+  // Search as you type, once typing pauses.
+  useEffect(() => () => clearTimeout(debounce.current), []);
+  function onSearch(value: string) {
+    setSearch(value);
+    clearTimeout(debounce.current);
+    debounce.current = setTimeout(() => go({ ...query, q: value, page: 1 }), 300);
+  }
 
-  const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
-  const current = Math.min(page, pageCount);
-  const start = (current - 1) * PAGE_SIZE;
-  const pageItems = visible.slice(start, start + PAGE_SIZE);
+  const from = (list.page - 1) * PEOPLE_PAGE_SIZE + 1;
+  const searching = query.q.trim() !== "" || query.filter !== "all";
 
   return (
     <div>
       <header className="animate-slide-up mb-6">
-        <h1 className="text-2xl font-bold text-ink">People</h1>
+        <h1 className="text-2xl font-bold text-ink">Guests</h1>
         <p className="mt-0.5 text-sm text-ink-3">
-          {PEOPLE.length} {PEOPLE.length === 1 ? "visitor" : "visitors"} in your pipeline
+          {list.churchTotal} {list.churchTotal === 1 ? "guest" : "guests"} in your pipeline
         </p>
       </header>
 
-      <div className="mb-5 flex flex-col gap-3 sm:flex-row">
-        <label className="relative flex-1">
-          <span className="sr-only">Search people</span>
-          <Search className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-ink-3" aria-hidden="true" />
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              setPage(1);
-            }}
-            placeholder="Search by name or email…"
-            className="w-full rounded-xl border border-line bg-surface py-2.5 pr-4 pl-10 text-sm text-ink transition-colors outline-none placeholder:text-ink-3 focus:border-[#2ec27e] focus:ring-2 focus:ring-[#2ec27e]/30"
-          />
-        </label>
-        <div role="group" aria-label="Filter people" className="flex flex-wrap items-center gap-2">
-          <SlidersHorizontal className="h-4 w-4 shrink-0 text-ink-3" aria-hidden="true" />
-          {FILTERS.map((f) => (
-            <button
-              key={f.id}
-              type="button"
-              onClick={() => {
-                setFilter(f.id);
-                setPage(1);
-              }}
-              aria-pressed={filter === f.id}
-              className={cn(
-                "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
-                filter === f.id ? "border-[#1a2e2a] bg-[#1a2e2a] text-white" : "border-line bg-surface text-ink-2 hover:border-ink-3",
-              )}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {visible.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 rounded-2xl border border-line/60 bg-surface py-20">
-          <Search className="h-8 w-8 text-line" aria-hidden="true" />
-          <p className="text-sm text-ink-3">No visitors match your search.</p>
+      {list.churchTotal === 0 ? (
+        <div className="flex flex-col items-center gap-2 rounded-2xl border border-line/60 bg-surface px-6 py-20 text-center">
+          <UsersRound className="h-8 w-8 text-line" aria-hidden="true" />
+          <p className="text-sm font-medium text-ink">No guests yet</p>
+          <p className="max-w-sm text-sm text-ink-3">
+            Guests appear here after their first visit comes in from Subsplash or a connection card.
+          </p>
         </div>
       ) : (
         <>
-          <ul className="space-y-2.5">
-            {pageItems.map((p, i) => (
-              <li key={p.id} className="animate-fade-in" style={{ animationDelay: `${i * 25}ms` }}>
-                <PersonCard person={p} />
-              </li>
-            ))}
-          </ul>
-          <Pagination
-            page={current}
-            pageCount={pageCount}
-            from={start + 1}
-            to={start + pageItems.length}
-            total={visible.length}
-            onChange={(p) => {
-              setPage(p);
-              window.scrollTo({ top: 0, behavior: "smooth" });
-            }}
-          />
+          <div className="mb-5 flex flex-col gap-3 sm:flex-row">
+            <label className="relative flex-1">
+              <span className="sr-only">Search people</span>
+              <Search className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-ink-3" aria-hidden="true" />
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => onSearch(e.target.value)}
+                maxLength={100}
+                placeholder="Search by name, email or phone…"
+                className="w-full rounded-xl border border-line bg-surface py-2.5 pr-4 pl-10 text-sm text-ink transition-colors outline-none placeholder:text-ink-3 focus:border-[#2ec27e] focus:ring-2 focus:ring-[#2ec27e]/30"
+              />
+            </label>
+            <div role="group" aria-label="Filter people" className="flex flex-wrap items-center gap-2">
+              <SlidersHorizontal className="h-4 w-4 shrink-0 text-ink-3" aria-hidden="true" />
+              {PEOPLE_FILTERS.map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => go({ q: search, filter: f.id, page: 1 })}
+                  aria-pressed={query.filter === f.id}
+                  className={cn(
+                    "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                    query.filter === f.id ? "border-[#1a2e2a] bg-[#1a2e2a] text-white" : "border-line bg-surface text-ink-2 hover:border-ink-3",
+                  )}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div aria-busy={pending} className={cn("transition-opacity", pending && "opacity-60")}>
+            {list.items.length === 0 ? (
+              <div className="flex flex-col items-center gap-3 rounded-2xl border border-line/60 bg-surface py-20">
+                <Search className="h-8 w-8 text-line" aria-hidden="true" />
+                <p className="text-sm text-ink-3">{searching ? "No guests match your search." : "No guests to show."}</p>
+              </div>
+            ) : (
+              <>
+                <ul className="space-y-2.5">
+                  {list.items.map((p, i) => (
+                    <li key={p.id} className="animate-fade-in" style={{ animationDelay: `${i * 25}ms` }}>
+                      <PersonCard person={p} />
+                    </li>
+                  ))}
+                </ul>
+                <Pagination
+                  page={list.page}
+                  pageCount={list.pageCount}
+                  from={from}
+                  to={from + list.items.length - 1}
+                  total={list.total}
+                  pageHref={(n) => href(pathname, { ...query, page: n })}
+                />
+              </>
+            )}
+          </div>
         </>
       )}
     </div>
@@ -143,16 +148,18 @@ function Pagination({
   from,
   to,
   total,
-  onChange,
+  pageHref,
 }: {
   page: number;
   pageCount: number;
   from: number;
   to: number;
   total: number;
-  onChange: (page: number) => void;
+  pageHref: (page: number) => string;
 }) {
   const step = "inline-flex h-8 min-w-8 items-center justify-center rounded-full border px-2.5 text-xs font-medium transition-colors";
+  const idle = "border-line bg-surface text-ink-2 hover:border-ink-3";
+  const disabled = "pointer-events-none border-line bg-surface text-ink-2 opacity-40";
   return (
     <nav aria-label="People pages" className="mt-5 flex flex-col items-center justify-between gap-3 sm:flex-row">
       <p className="text-xs text-ink-3 tabular-nums">
@@ -160,57 +167,52 @@ function Pagination({
       </p>
       {pageCount > 1 && (
         <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => onChange(page - 1)}
-            disabled={page === 1}
-            aria-label="Previous page"
-            className={cn(step, "border-line bg-surface text-ink-2 hover:border-ink-3 disabled:pointer-events-none disabled:opacity-40")}
-          >
+          <Link href={pageHref(page - 1)} aria-label="Previous page" aria-disabled={page === 1} tabIndex={page === 1 ? -1 : undefined} className={cn(step, page === 1 ? disabled : idle)}>
             <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
-          </button>
+          </Link>
           {Array.from({ length: pageCount }, (_, i) => i + 1).map((n) => (
-            <button
+            <Link
               key={n}
-              type="button"
-              onClick={() => onChange(n)}
+              href={pageHref(n)}
               aria-current={n === page ? "page" : undefined}
-              className={cn(
-                step,
-                "tabular-nums",
-                n === page ? "border-[#1a2e2a] bg-[#1a2e2a] text-white" : "border-line bg-surface text-ink-2 hover:border-ink-3",
-              )}
+              className={cn(step, "tabular-nums", n === page ? "border-[#1a2e2a] bg-[#1a2e2a] text-white" : idle)}
             >
               {n}
-            </button>
+            </Link>
           ))}
-          <button
-            type="button"
-            onClick={() => onChange(page + 1)}
-            disabled={page === pageCount}
+          <Link
+            href={pageHref(page + 1)}
             aria-label="Next page"
-            className={cn(step, "border-line bg-surface text-ink-2 hover:border-ink-3 disabled:pointer-events-none disabled:opacity-40")}
+            aria-disabled={page === pageCount}
+            tabIndex={page === pageCount ? -1 : undefined}
+            className={cn(step, page === pageCount ? disabled : idle)}
           >
             <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
-          </button>
+          </Link>
         </div>
       )}
     </nav>
   );
 }
 
-function PersonCard({ person: p }: { person: Person }) {
-  const visited = lastVisit(p);
+function PersonCard({ person: p }: { person: GuestListItem }) {
+  const name = fullName(p);
   return (
     <Link
       href={`/people/${p.id}`}
       className="group flex items-center gap-4 rounded-2xl border border-line/60 bg-surface p-4 transition-all hover:border-line hover:shadow-md"
     >
-      <GuestAvatar name={fullName(p)} size="lg" className="ring-2 ring-bg" />
+      <GuestAvatar name={name} size="lg" className="ring-2 ring-bg" />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-semibold text-ink">{fullName(p)}</span>
+          <span className="text-sm font-semibold text-ink">{name}</span>
           <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", STAGE_COLOR[p.stage])}>{STAGE_BADGE[p.stage].label}</span>
+          {p.needsReview && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-warning-tint px-2 py-0.5 text-[11px] font-medium text-warning">
+              <ShieldQuestion className="h-3 w-3" aria-hidden="true" />
+              Check identity
+            </span>
+          )}
           {p.needsAttention && <span className="h-2 w-2 rounded-full bg-danger" aria-label="Needs attention" />}
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-3">
@@ -226,7 +228,7 @@ function PersonCard({ person: p }: { person: Person }) {
               {p.phone}
             </span>
           )}
-          {!p.email && !p.phone && <span className="text-xs text-ink-3">First visit {formatLongDay(p.firstVisitAt)}</span>}
+          {!p.email && !p.phone && <span className="text-xs text-ink-3">No contact details</span>}
         </div>
         {p.interests.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1.5">
@@ -240,7 +242,7 @@ function PersonCard({ person: p }: { person: Person }) {
       </div>
       <div className="hidden shrink-0 text-right sm:block">
         <p className="text-[11px] text-ink-3">Last visit</p>
-        <p className="text-xs font-medium text-ink-2">{formatLongDay(visited)}</p>
+        <p className="text-xs font-medium text-ink-2">{p.lastVisitAt ? formatLongDay(p.lastVisitAt) : "No visits yet"}</p>
       </div>
       <ChevronRight className="h-4 w-4 shrink-0 text-line transition-colors group-hover:text-ink-3" aria-hidden="true" />
     </Link>

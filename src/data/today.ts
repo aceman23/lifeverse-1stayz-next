@@ -2,13 +2,11 @@ import { hoursAgo } from "./clock";
 import type { TodayItem, TodayStatus } from "./types";
 
 /** Ranking order on Today: escalations first, Sunday prep last. */
-export const TODAY_ORDER: TodayStatus[] = ["escalation", "draft_ready", "replied", "needs_follow_up", "upcoming", "sunday_prep"];
+export const TODAY_ORDER: TodayStatus[] = ["escalation", "alert", "review", "draft_ready", "replied", "needs_follow_up", "upcoming", "sunday_prep"];
 
 /** Statuses that need a person to act; these feed the red badge on "Today". */
-export const ACTION_STATUSES: TodayStatus[] = ["escalation", "draft_ready"];
+export const ACTION_STATUSES: TodayStatus[] = ["escalation", "alert", "review", "draft_ready"];
 
-/** Escalations should get a human reply within this window. */
-export const ESCALATION_SLA_MIN = 15;
 
 export const TODAY_ITEMS: TodayItem[] = [
   {

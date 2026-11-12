@@ -3,7 +3,19 @@
 import "server-only";
 
 export { createModelClient, type ModelClientOptions } from "./client";
-export { AI_FEATURES, keyEnvName, modelFor } from "./config";
+export { AI_FEATURES, canSendGuestData, guestDataAllowed, keyEnvName, modelFor } from "./config";
+export { classify, type ClassifyLabel, type ClassifyRequest, type ClassifyResult } from "./classify";
+export {
+  applyRules,
+  classFromRules,
+  combineClass,
+  DATA_CLASS_FALLBACK,
+  DATA_CLASS_LABELS,
+  DATA_CLASS_TASK,
+  type DataClassLabel,
+  type MessageClass,
+  type RuleResult,
+} from "./data-class";
 export type { StubResponder } from "./providers/stub";
 export {
   ModelConfigError,

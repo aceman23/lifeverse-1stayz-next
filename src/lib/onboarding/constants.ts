@@ -149,12 +149,12 @@ export const MESSAGE_TEMPLATES: MessageTemplate[] = [
   {
     id: "short",
     name: "Short & simple",
-    body: "Hi {first_name}! So glad you visited {church_name} today. I'm here if you have any questions — just reply to this text. Reply STOP to opt out.",
+    body: "Hi {first_name}! So glad you visited {church_name} today. Is there anything I can help you with? Just reply to this text. Reply STOP to opt out.",
   },
   {
     id: "family",
     name: "Family-focused",
-    body: "Hi {first_name}! It was great having your family at {church_name} this morning. I'd love to help you find your way around — anything you'd like to know about kids' programs or small groups? Just text me back. Reply STOP to opt out.",
+    body: "Hi {first_name}! It was great having your family at {church_name} this morning. I'd love to help you find your way around. Is there anything you'd like to know about kids' programs or small groups? Just text me back. Reply STOP to opt out.",
   },
 ];
 

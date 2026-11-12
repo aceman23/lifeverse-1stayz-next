@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { OnboardingStatus } from "./routing";
+import { logError } from "@/lib/log";
 
 /**
  * Has the signed-in user finished onboarding for a church they belong to?
@@ -15,7 +16,7 @@ export async function getOnboardingStatus(supabase: SupabaseClient): Promise<Onb
     .limit(1);
 
   if (error) {
-    console.error(JSON.stringify({ event: "onboarding.status_error", code: error.code, message: error.message }));
+    logError("onboarding.status_error", { code: error.code, message: error.message });
     return "unknown";
   }
   return data.length > 0 ? "complete" : "incomplete";

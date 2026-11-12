@@ -9,6 +9,7 @@ import Checkbox from "../ui/Checkbox";
 import SectionHeader from "../ui/SectionHeader";
 import SegmentedControl from "../ui/SegmentedControl";
 import StatusPill, { type PillTone } from "../ui/StatusPill";
+import SmsPolicyCard from "./SmsPolicyCard";
 
 const SMS_STATUS: Record<SmsStatus, { label: string; tone: PillTone; next: SmsStatus; detail: string }> = {
   submitted: {
@@ -108,6 +109,8 @@ export default function Step4Systems() {
           </div>
         )}
       </Card>
+
+      <SmsPolicyCard />
 
       <Card title="More integrations" icon={Plug} description="Coming later in the pilot.">
         <ul className="grid grid-cols-1 gap-3 sm:grid-cols-3">

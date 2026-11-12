@@ -4,7 +4,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { useRouter } from "next/navigation";
 import { signOut } from "@/lib/auth";
 import { LAST_STEP, STORAGE_KEY } from "./constants";
-import { finishOnboarding, loadOnboarding, saveSteps } from "./db";
+import { PilotBlockedError, isPilotBlock, type PilotBlock } from "@/lib/pilot";
+import { finishOnboarding, loadOnboarding, loadPilotAccess, saveSteps } from "./db";
 import { createDemoState, createInitialState } from "./initial-state";
 import type { OnboardingState, StatePatch } from "./types";
 import { computeReadyCheck, isStepComplete } from "./validation";
@@ -19,9 +20,16 @@ interface OnboardingContextValue {
   /** Set when the saved setup couldn't be loaded. The wizard shows it with a retry button. */
   loadError: string | null;
   retryLoad: () => void;
+  /**
+   * Set on load when the user has no church and may not create one (email not approved for the
+   * pilot, or not confirmed). The wizard shows a full-page message instead of the form.
+   */
+  pilotBlock: PilotBlock | null;
   /** True while a step is being written to Supabase. */
   saving: boolean;
   saveError: string | null;
+  /** Set with saveError when step 1 was refused for pilot access. */
+  saveErrorBlock: PilotBlock | null;
   update: (patch: StatePatch) => void;
   nextStep: () => Promise<void>;
   prevStep: () => Promise<void>;
@@ -54,8 +62,10 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
   const [hydrated, setHydrated] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
+  const [pilotBlock, setPilotBlock] = useState<PilotBlock | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveErrorBlock, setSaveErrorBlock] = useState<PilotBlock | null>(null);
   // Furthest step the database has (-1: nothing yet). Later steps go up with the next save.
   const lastSavedStep = useRef(-1);
 
@@ -73,6 +83,12 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
             lastSavedStep.current = saved.lastSavedStep;
             const merged = { ...next, ...saved.patch };
             next = { ...merged, currentStep: clampStep(saved.currentStep) };
+          } else {
+            // No church yet: only approved, confirmed emails may create one. If the check itself
+            // fails, show the wizard; save_onboarding_church enforces the same rule anyway.
+            const access = await loadPilotAccess().catch(() => null);
+            if (cancelled) return;
+            setPilotBlock(isPilotBlock(access) ? access : null);
           }
         } catch (err) {
           // Don't show an empty wizard: saving it would overwrite what's in the database.
@@ -92,11 +108,13 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
 
   const retryLoad = useCallback(() => {
     setLoadError(null);
+    setPilotBlock(null);
     setLoadAttempt((n) => n + 1);
   }, []);
 
   const update = useCallback((patch: StatePatch) => {
     setSaveError(null);
+    setSaveErrorBlock(null);
     setState((prev) => {
       const next = { ...prev, ...(typeof patch === "function" ? patch(prev) : patch) };
       return { ...next, currentStep: clampStep(next.currentStep), readyCheck: computeReadyCheck(next) };
@@ -117,6 +135,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
     }
     setSaving(true);
     setSaveError(null);
+    setSaveErrorBlock(null);
     try {
       const saved = await saveSteps(s, s.currentStep, lastSavedStep.current, resumeStep);
       if (saved === null) {
@@ -128,6 +147,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       return true;
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Couldn't save your progress. Try again.");
+      if (err instanceof PilotBlockedError) setSaveErrorBlock(err.block);
       return false;
     } finally {
       setSaving(false);
@@ -190,8 +210,10 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       hydrated,
       loadError,
       retryLoad,
+      pilotBlock,
       saving,
       saveError,
+      saveErrorBlock,
       update,
       nextStep,
       prevStep,
@@ -200,7 +222,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       saveAndExit,
       finish,
     }),
-    [state, hydrated, loadError, retryLoad, saving, saveError, update, nextStep, prevStep, goToStep, reset, saveAndExit, finish],
+    [state, hydrated, loadError, retryLoad, pilotBlock, saving, saveError, saveErrorBlock, update, nextStep, prevStep, goToStep, reset, saveAndExit, finish],
   );
 
   return <OnboardingContext.Provider value={value}>{children}</OnboardingContext.Provider>;

@@ -1,15 +1,17 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { usePathname } from "next/navigation";
 import { Bot, Send, X } from "lucide-react";
 import { DEMO_COOKIE } from "@/lib/demo";
+import ChatText from "./ChatText";
 
 // Login and sign-up: fixed answers to a few questions, no AI.
 const SUGGESTIONS: Record<string, string> = {
   "What is Agentic AI digital assistants?":
     "Agentic AI digital assistants are AI helpers that act on your behalf. In 1Stayz, they follow up with each first-time guest through personal, timely messages so nobody slips through the cracks.",
   "How do I get access?":
-    "1Stayz is currently in a pilot. Tap “Create an account” on this page, or continue with Google or Apple, to get started.",
+    "1Stayz is currently in a pilot. Apply at 1stayz.com/pilot (tap “Join the Pilot” on the sign-in page). Once your church is approved, create an account here with the same email you applied with.",
   "What does this system do?":
     "1Stayz helps your church retain first-time visitors. It keeps track of new guests and engages each one with personalized follow-up that feels genuinely human.",
   "Is my church's data secure?":
@@ -58,6 +60,9 @@ export default function ChatWidget({ context = "login" }: { context?: "login" | 
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const dashboard = context === "dashboard";
+  // On phones the launcher would cover the reply box's send button in Conversations.
+  const pathname = usePathname();
+  const hideOnPhone = dashboard && pathname.startsWith("/conversations");
 
   useEffect(() => {
     const handleOpen = () => setOpen(true);
@@ -105,7 +110,7 @@ export default function ChatWidget({ context = "login" }: { context?: "login" | 
   const showStarters = dashboard && messages.length === 1;
 
   return (
-    <div className="fixed bottom-5 right-5 z-50 flex flex-col items-end gap-3">
+    <div className={`fixed right-5 bottom-5 z-50 flex-col items-end gap-3 ${hideOnPhone ? "hidden md:flex" : "flex"}`}>
       {open && (
         <div
           role="dialog"
@@ -128,16 +133,15 @@ export default function ChatWidget({ context = "login" }: { context?: "login" | 
           </div>
 
           <div ref={scrollRef} className="flex-1 space-y-2.5 overflow-y-auto p-4" aria-live="polite">
-            {messages.map((m, i) => (
-              <p
-                key={i}
-                className={`max-w-[85%] whitespace-pre-line rounded-12 px-3.5 py-2.5 text-sm leading-relaxed ${
-                  m.from === "user" ? "ml-auto bg-btn text-white" : "bg-bg text-ink"
-                }`}
-              >
-                {m.text}
-              </p>
-            ))}
+            {messages.map((m, i) =>
+              m.from === "user" ? (
+                <p key={i} className="ml-auto max-w-[85%] whitespace-pre-line rounded-12 bg-btn px-3.5 py-2.5 text-sm leading-relaxed text-white">
+                  {m.text}
+                </p>
+              ) : (
+                <ChatText key={i} text={m.text} className="max-w-[85%] rounded-12 bg-bg px-3.5 py-2.5 text-sm leading-relaxed text-ink" />
+              ),
+            )}
             {loading && (
               <p className="max-w-[85%] rounded-12 bg-bg px-3.5 py-2.5 text-sm text-ink-3">Grace is typing…</p>
             )}
@@ -189,17 +193,17 @@ export default function ChatWidget({ context = "login" }: { context?: "login" | 
         aria-label={open ? "Close Ask 1Stayz" : "Open Ask 1Stayz"}
         aria-expanded={open}
         className={`flex items-center justify-center gap-2 rounded-full shadow-lg transition-all duration-200 ${
-          open ? "h-11 w-11 bg-stone-800 hover:bg-stone-700" : "h-14 bg-[#008f83] px-4 hover:scale-[1.02] hover:bg-[#00796f]"
+          open ? "h-11 w-11 bg-stone-800 hover:bg-stone-700" : "h-12 w-12 bg-[#008f83] hover:scale-[1.02] hover:bg-[#00796f] sm:h-14 sm:w-auto sm:px-4"
         }`}
       >
         {open ? (
           <X className="h-5 w-5 text-white" />
         ) : (
           <>
-            <span className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-white/80 bg-white/15">
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/15 sm:border-2 sm:border-white/80">
               <Bot className="h-5 w-5 text-white" />
             </span>
-            <span className="whitespace-nowrap text-sm font-semibold text-white">Ask 1Stayz</span>
+            <span className="hidden whitespace-nowrap text-sm font-semibold text-white sm:inline">Ask 1Stayz</span>
           </>
         )}
       </button>

@@ -89,7 +89,7 @@ export interface Conversation {
   messages: Message[];
 }
 
-export type TodayStatus = "escalation" | "draft_ready" | "replied" | "needs_follow_up" | "upcoming" | "sunday_prep";
+export type TodayStatus = "escalation" | "alert" | "review" | "draft_ready" | "replied" | "needs_follow_up" | "upcoming" | "sunday_prep";
 
 export interface TodayItem {
   id: string;
@@ -112,7 +112,28 @@ export interface TodayItem {
   summary?: string;
   why?: string;
   chips?: string[];
+  /** UI-07: summary and next step for an escalation (real rows). */
+  brief?: { summary: string[]; next: { title: string; steps: string[] } };
   service?: string;
+  /** The guest, for person items (real rows carry it; demo rows get it from mock people). */
+  person?: TodayPerson;
+  /** The conversation this item is about. */
+  threadId?: string;
+  /** draft_ready: the held message. */
+  messageId?: string;
+  /** alert: the church_alerts row. */
+  alertId?: string;
+  /** Staff account the conversation is assigned to. */
+  assignedTo?: string | null;
+}
+
+export interface TodayPerson {
+  id: string;
+  name: string;
+  firstName: string;
+  phone: string | null;
+  /** "First visit · Oct 25" */
+  visitLabel: string;
 }
 
 export type DocumentStatus = "indexed" | "processing" | "pending" | "failed";
